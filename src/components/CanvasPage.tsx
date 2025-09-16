@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
 
 // Mini Graph Canvas v8 — smooth grab-mode pan + wheel zoom + snap-to-grid + zoom % + full-bleed grid + drag constraints
 // Tweaks: floating palette, connect auto-select, palette-driven add mode, simplified shortcuts.
@@ -168,6 +168,8 @@ export default function CanvasPage() {
   const [hover, setHover] = useState({ type: null, id: null }); // 'node' | 'edge' | null
   const [connectSourceId, setConnectSourceId] = useState(null);
   const [connectPreview, setConnectPreview] = useState(null);
+  const [nodePreview, setNodePreview] = useState(null);
+  const [isPointerInsideCanvas, setIsPointerInsideCanvas] = useState(false);
 
   // Drag state: 'node' | 'ctrl' | 'pan'
   const dragRef = useRef({ type: null, id: null, dx: 0, dy: 0, t: 0.5 });
@@ -176,6 +178,7 @@ export default function CanvasPage() {
   // rAF batching for panning
   const panDeltaRef = useRef({ dx: 0, dy: 0 });
   const panRafRef = useRef(0);
+  const lastPointerWorldRef = useRef(null);
 
   const currentTemplate = useMemo(
     () => paletteTemplates.find((tpl) => tpl.id === pendingTemplateId) || null,
@@ -249,6 +252,12 @@ export default function CanvasPage() {
         setPendingTemplateId(null);
         setMode("connect");
       }
+      if (e.key === "Escape") {
+        if ((mode === "add-node" && currentTemplate) || mode === "connect") {
+          e.preventDefault();
+          activateSelectMode();
+        }
+      }
     };
     const onKeyUp = (e) => {
       if (e.code === "Space") {
@@ -262,9 +271,17 @@ export default function CanvasPage() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [selection]);
+  }, [selection, mode, currentTemplate]);
 
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+
+  const computeNodePreviewPosition = useCallback((point) => {
+    const halfWidth = NODE_WIDTH / 2;
+    const halfHeight = NODE_HEIGHT / 2;
+    const x = clamp(point.x - halfWidth, WORLD.minX, WORLD.maxX - NODE_WIDTH);
+    const y = clamp(point.y - halfHeight, WORLD.minY, WORLD.maxY - NODE_HEIGHT);
+    return { x, y };
+  }, []);
 
   useEffect(() => {
     if (!connectSourceId) {
@@ -277,6 +294,16 @@ export default function CanvasPage() {
       setConnectPreview(null);
     }
   }, [mode]);
+
+  useEffect(() => {
+    if (spacePressed || mode !== "add-node" || !currentTemplate || !isPointerInsideCanvas) {
+      setNodePreview(null);
+      return;
+    }
+    if (lastPointerWorldRef.current) {
+      setNodePreview(computeNodePreviewPosition(lastPointerWorldRef.current));
+    }
+  }, [spacePressed, mode, currentTemplate, isPointerInsideCanvas, computeNodePreviewPosition]);
 
   function getSvgPointInWorld(clientX, clientY) {
     const svg = svgRef.current;
@@ -376,12 +403,15 @@ export default function CanvasPage() {
     setMode("select");
     setPendingTemplateId(null);
     setConnectSourceId(null);
+    setConnectPreview(null);
+    setNodePreview(null);
   };
   const activateConnectMode = () => {
     setMode("connect");
     setPendingTemplateId(null);
     setConnectSourceId(null);
     setConnectPreview(null);
+    setNodePreview(null);
   };
   const activateTemplate = (templateId) => {
     if (mode === "add-node" && pendingTemplateId === templateId) {
@@ -404,11 +434,32 @@ export default function CanvasPage() {
       e.preventDefault();
     }
   };
-  const onSVGPointerMove = (e) => {
+  const onSVGPointerEnter = (e) => {
+    setIsPointerInsideCanvas(true);
+    const pw = getWorldPoint(e.clientX, e.clientY);
+    lastPointerWorldRef.current = pw;
     if (spacePressed) return;
     if (mode === "connect" && connectSourceId) {
-      const pw = getWorldPoint(e.clientX, e.clientY);
       setConnectPreview(pw);
+    } else if (mode === "add-node" && currentTemplate) {
+      setNodePreview(computeNodePreviewPosition(pw));
+    }
+  };
+  const onSVGPointerMove = (e) => {
+    const pw = getWorldPoint(e.clientX, e.clientY);
+    lastPointerWorldRef.current = pw;
+
+    if (spacePressed) {
+      if (nodePreview) {
+        setNodePreview(null);
+      }
+      return;
+    }
+
+    if (mode === "connect" && connectSourceId) {
+      setConnectPreview(pw);
+    } else if (mode === "add-node" && currentTemplate) {
+      setNodePreview(computeNodePreviewPosition(pw));
     }
   };
   const onSVGPointerUp = (e) => {
@@ -422,9 +473,12 @@ export default function CanvasPage() {
   };
 
   const onSVGPointerLeave = () => {
+    setIsPointerInsideCanvas(false);
+    lastPointerWorldRef.current = null;
     if (mode === "connect") {
       setConnectPreview(null);
     }
+    setNodePreview(null);
   };
 
   const onSVGClick = (e) => {
@@ -432,12 +486,15 @@ export default function CanvasPage() {
     const pw = getWorldPoint(e.clientX, e.clientY);
     if (mode === "add-node" && currentTemplate) {
       const id = uid();
-      let x = snap(pw.x - NODE_WIDTH / 2);
-      let y = snap(pw.y - NODE_HEIGHT / 2);
-      x = clamp(x, WORLD.minX, WORLD.maxX - NODE_WIDTH);
-      y = clamp(y, WORLD.minY, WORLD.maxY - NODE_HEIGHT);
-      setNodes((prev) => prev.concat({ id, x, y, width: NODE_WIDTH, height: NODE_HEIGHT, label: currentTemplate.label }));
+      const placement = nodePreview || computeNodePreviewPosition(pw);
+      setNodes((prev) =>
+        prev.concat({ id, x: placement.x, y: placement.y, width: NODE_WIDTH, height: NODE_HEIGHT, label: currentTemplate.label })
+      );
       setSelection({ type: "node", id });
+      if (!nodePreview) {
+        setNodePreview(placement);
+      }
+      setPendingTemplateId(null)
       return;
     }
     setSelection({ type: null, id: null });
@@ -592,6 +649,7 @@ export default function CanvasPage() {
           className="w-full h-full"
           onWheel={onWheel}
           onPointerDown={onSVGPointerDown}
+          onPointerEnter={onSVGPointerEnter}
           onPointerMove={onSVGPointerMove}
           onPointerUp={onSVGPointerUp}
           onPointerLeave={onSVGPointerLeave}
@@ -648,6 +706,35 @@ export default function CanvasPage() {
                 strokeDasharray="6 6"
                 style={{ pointerEvents: "none" }}
               />
+            ) : null}
+
+            {nodePreview && mode === "add-node" && currentTemplate ? (
+              <g style={{ pointerEvents: "none" }}>
+                <rect
+                  x={nodePreview.x}
+                  y={nodePreview.y}
+                  width={NODE_WIDTH}
+                  height={NODE_HEIGHT}
+                  rx={16}
+                  ry={16}
+                  fill="#fff"
+                  fillOpacity={0.6}
+                  stroke={selectedBlue}
+                  strokeWidth={1.5}
+                  strokeOpacity={0.5}
+                />
+                <text
+                  x={nodePreview.x + NODE_WIDTH / 2}
+                  y={nodePreview.y + NODE_HEIGHT / 2 + 4}
+                  textAnchor="middle"
+                  fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                  fontSize={13}
+                  fill="#0369a1"
+                  fillOpacity={0.6}
+                >
+                  {currentTemplate.label}
+                </text>
+              </g>
             ) : null}
 
             {nodes.map((n) => {
