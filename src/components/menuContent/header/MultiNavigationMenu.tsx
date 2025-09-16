@@ -14,6 +14,7 @@ const defaultNavigation: NavigationItem[] = [
   { id: 'trigger', label: 'Trigger' },
   { id: 'setup', label: 'Setup' },
   { id: 'agent', label: 'Agent' },
+  { id: 'output', label: 'Output' },
 ]
 
 type MultiNavigationMenuProps = {
@@ -37,8 +38,8 @@ export default function MultiNavigationMenu({ items = defaultNavigation }: Multi
           const isOpen = !!openMap[node.id]
           const isActive = activeId === node.id
           const baseTabClasses = isTopLevel
-            ? `px-3 py-2 border-b-2 ${isActive ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-600 hover:text-gray-800 hover:border-gray-300'}`
-            : 'px-2 py-1 rounded hover:bg-gray-100 text-left'
+            ? `px-3 py-2 border-b-2 ${isActive ? 'border-blue-400 text-blue-300' : 'border-transparent text-neutral-300 hover:text-white hover:border-neutral-600'}`
+            : 'px-2 py-1 rounded hover:bg-neutral-800 text-left text-neutral-300'
 
           return (
             <li key={node.id} className="relative">
@@ -98,7 +99,7 @@ export default function MultiNavigationMenu({ items = defaultNavigation }: Multi
   }
 
   return (
-    <div className="w-full bg-white/80 backdrop-blur">
+    <div className="w-full">
       <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-center">
         <nav className="flex">
           {renderItems(items)}

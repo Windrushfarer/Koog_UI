@@ -17,11 +17,11 @@ export default function SetupContent() {
 
   return (
     <section>
-      <h2 className="text-xl font-semibold mb-2">Setup</h2>
-      <p className="text-gray-700 mb-4">Provide required settings, credentials, and parameters.</p>
+      <h2 className="text-xl font-semibold mb-2 text-neutral-100">Setup</h2>
+      <p className="text-neutral-300 mb-4">Provide required settings, credentials, and parameters.</p>
 
       <div className="mt-6">
-        <h3 className="text-lg font-semibold mb-2">LLM Provider</h3>
+        <h3 className="text-lg font-semibold mb-2 text-neutral-100">LLM Provider</h3>
         <div className="flex flex-wrap gap-2">
           {providers.map((p) => {
             const isActive = p.id === selectedProviderId
@@ -36,8 +36,8 @@ export default function SetupContent() {
                 }}
                 className={`px-3 py-1.5 rounded-full border text-sm transition ${
                   isActive
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    ? 'border-blue-400 bg-blue-500/10 text-blue-300'
+                    : 'border-neutral-700 bg-neutral-800 text-neutral-300 hover:bg-neutral-700/50'
                 }`}
                 aria-pressed={isActive}
               >
@@ -48,12 +48,12 @@ export default function SetupContent() {
         </div>
 
         <div className="mt-6 max-w-xl">
-          <label htmlFor="modelVersion" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="modelVersion" className="block text-sm font-medium text-neutral-300 mb-1">
             Model version
           </label>
           <select
             id="modelVersion"
-            className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            className="block w-full rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
             value={selectedVersionId}
             onChange={(e) => setSelectedVersionId(e.target.value)}
           >
@@ -61,7 +61,7 @@ export default function SetupContent() {
               <option key={v.id} value={v.id}>{v.name}</option>
             ))}
           </select>
-          <p className="mt-2 text-sm text-gray-500">Selected: {selectedProviderId} / {selectedVersionId}</p>
+          <p className="mt-2 text-sm text-neutral-400">Selected: {selectedProviderId} / {selectedVersionId}</p>
         </div>
       </div>
     </section>
