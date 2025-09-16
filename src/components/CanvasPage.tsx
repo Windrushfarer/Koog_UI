@@ -666,9 +666,21 @@ export default function CanvasPage() {
     return { d, p0, p2, c, tMid, mid };
   }
 
+  const edgesWithGeometry = useMemo(() => {
+    const acc: Array<{ edge: any; geometry: NonNullable<ReturnType<typeof edgeGeometry>>; gradientId: string }> = [];
+    edges.forEach((edge) => {
+      const geometry = edgeGeometry(edge);
+      if (!geometry) return;
+      acc.push({ edge, geometry, gradientId: `edge-gradient-${edge.id}` });
+    });
+    return acc;
+  }, [edges, nodeMapRender]);
+
   const lightBlue = "#38bdf8";
   const selectedBlue = "#0ea5e9";
   const baseStroke = "#94a3b8";
+  const outputColor = "#FF3B70";
+  const inputColor = "#B191FF";
   const nodeFill = "#1e293b";
   const nodeText = "#e2e8f0";
 
@@ -720,17 +732,34 @@ export default function CanvasPage() {
             <pattern id="grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
               <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="#1f2937" strokeWidth="1" />
             </pattern>
+            {edgesWithGeometry.map(({ gradientId, geometry }) => (
+              <linearGradient
+                key={gradientId}
+                id={gradientId}
+                x1={geometry.p0.x}
+                y1={geometry.p0.y}
+                x2={geometry.p2.x}
+                y2={geometry.p2.y}
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset="0%" stopColor={outputColor} />
+                <stop offset="100%" stopColor={inputColor} />
+              </linearGradient>
+            ))}
           </defs>
 
           <g transform={`translate(${panX} ${panY}) scale(${scale})`}>
             <rect x={-BG_EXTENT} y={-BG_EXTENT} width={BG_EXTENT * 2} height={BG_EXTENT * 2} fill="url(#grid)" />
 
-            {edges.map((edge) => {
-              const g = edgeGeometry(edge);
-              if (!g) return null;
+            {edgesWithGeometry.map(({ edge, geometry: g, gradientId }) => {
               const isSelected = selection.type === "edge" && selection.id === edge.id;
               const isHovered = hover.type === "edge" && hover.id === edge.id;
-              const stroke = isSelected ? selectedBlue : isHovered ? lightBlue : baseStroke;
+              const gradientStroke = `url(#${gradientId})`;
+              const highlightStroke = isSelected ? selectedBlue : lightBlue;
+              const highlightOpacity = isSelected ? 0.55 : 0.35;
+              const labelWidth = 44;
+              const labelHeight = 16;
+              const labelOffset = 20;
               return (
                 <g key={edge.id}>
                   <path
@@ -743,10 +772,71 @@ export default function CanvasPage() {
                     onPointerEnter={(e) => onEdgeEnter(e, edge.id)}
                     onPointerLeave={onEdgeLeave}
                   />
-                  <path d={g.d} stroke={stroke} strokeWidth={2} fill="none" />
+                  <path
+                    d={g.d}
+                    stroke={gradientStroke}
+                    strokeWidth={2}
+                    fill="none"
+                    strokeLinecap="round"
+                    style={{ pointerEvents: "none" }}
+                  />
+                  {(isHovered || isSelected) && (
+                    <path
+                      d={g.d}
+                      stroke={highlightStroke}
+                      strokeWidth={4}
+                      fill="none"
+                      strokeOpacity={highlightOpacity}
+                      strokeLinecap="round"
+                      style={{ pointerEvents: "none" }}
+                    />
+                  )}
+                  <circle
+                    cx={g.p0.x}
+                    cy={g.p0.y}
+                    r={4.5}
+                    fill={outputColor}
+                    stroke={nodeFill}
+                    strokeWidth={1.5}
+                    style={{ pointerEvents: "none" }}
+                  />
+                  <circle
+                    cx={g.p2.x}
+                    cy={g.p2.y}
+                    r={4.5}
+                    fill={inputColor}
+                    stroke={nodeFill}
+                    strokeWidth={1.5}
+                    style={{ pointerEvents: "none" }}
+                  />
                   {isSelected && (
                     <g style={{ cursor: "grab" }} onPointerDown={(e) => onEdgeHandlePointerDown(e, edge.id, 0.5)}>
-                      <circle cx={g.mid.x} cy={g.mid.y} r={6} fill={nodeFill} stroke={selectedBlue} strokeWidth={2} />
+                      <circle cx={g.mid.x} cy={g.mid.y} r={10} fill={nodeFill} stroke={gradientStroke} strokeWidth={2} />
+                      <g transform={`translate(${g.mid.x} ${g.mid.y - labelOffset})`}>
+                        <rect
+                          x={-labelWidth / 2}
+                          y={-labelHeight / 2}
+                          width={labelWidth}
+                          height={labelHeight}
+                          rx={labelHeight / 2}
+                          fill={nodeFill}
+                          fillOpacity={0.92}
+                          stroke={gradientStroke}
+                          strokeWidth={1}
+                        />
+                        <text
+                          x={0}
+                          y={0}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                          fontSize={9}
+                          fontWeight={600}
+                          fill={gradientStroke}
+                        >
+                          Adjust
+                        </text>
+                      </g>
                     </g>
                   )}
                 </g>
@@ -804,6 +894,8 @@ export default function CanvasPage() {
               const isEditingLabel = canEditLabel && editingLabelId === n.id;
               const displayLabel = n.label || "Untitled";
               const desiredCursor = mode === "connect" ? "crosshair" : !isSelected && isHovered ? "pointer" : "grab";
+              const inputAnchor = fixedInputAnchor(n);
+              const outputAnchor = fixedOutputAnchor(n);
               return (
                 <g
                   key={n.id}
@@ -879,6 +971,14 @@ export default function CanvasPage() {
                       {displayLabel}
                     </text>
                   ) : null}
+                  <g style={{ pointerEvents: "none" }}>
+                    {n.id !== START_NODE_ID && (
+                      <circle cx={inputAnchor.x} cy={inputAnchor.y} r={5.5} fill={inputColor} stroke={nodeFill} strokeWidth={1.5} />
+                    )}
+                    {n.id !== FINISH_NODE_ID && (
+                      <circle cx={outputAnchor.x} cy={outputAnchor.y} r={5.5} fill={outputColor} stroke={nodeFill} strokeWidth={1.5} />
+                    )}
+                  </g>
                 </g>
               );
             })}
