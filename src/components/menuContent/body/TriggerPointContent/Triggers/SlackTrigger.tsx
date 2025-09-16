@@ -1,15 +1,20 @@
-import { useState } from 'react'
 import TriggerSlackForm from '../TriggerSlackForm'
 
-export default function SlackTrigger() {
-  const [isOpen, setIsOpen] = useState(false)
+interface SlackTriggerProps {
+  isOpen: boolean
+  onToggle: () => void
+  value: string
+  onValueChange: (value: string) => void
+}
+
+export default function SlackTrigger({ isOpen, onToggle, value, onValueChange }: SlackTriggerProps) {
   return (
     <div className="w-[600px] mx-auto rounded-2xl p-[1px] bg-gradient-to-r from-violet-500/30 via-violet-400/10 to-fuchsia-500/30">
       <button
         type="button"
         aria-label="Slack trigger"
-        className="group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-violet-400/30 transition"
-        onClick={() => setIsOpen((v) => !v)}
+        className="cursor-pointer group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-violet-400/30 transition"
+        onClick={onToggle}
         aria-expanded={isOpen}
       >
         <div className="flex items-center justify-center gap-5 p-4">
@@ -39,7 +44,7 @@ export default function SlackTrigger() {
       </button>
       {isOpen && (
         <div className="mt-3 rounded-2xl bg-gradient-to-b from-white to-gray-50 shadow-md">
-          <TriggerSlackForm />
+          <TriggerSlackForm value={value} onValueChange={onValueChange} />
         </div>
       )}
     </div>

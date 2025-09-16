@@ -1,10 +1,17 @@
-export default function GoogleCalendarTrigger() {
+interface GoogleCalendarTriggerProps {
+  isOpen: boolean
+  onToggle: () => void
+}
+
+export default function GoogleCalendarTrigger({ isOpen, onToggle }: GoogleCalendarTriggerProps) {
   return (
     <div className="w-[600px] mx-auto rounded-2xl p-[1px] bg-gradient-to-r from-sky-500/30 via-sky-400/10 to-blue-500/30">
       <button
         type="button"
         aria-label="Google Calendar trigger"
-        className="group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-sky-400/30 transition"
+        className="cursor-pointer group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-sky-400/30 transition"
+        onClick={onToggle}
+        aria-expanded={isOpen}
       >
         <div className="flex items-center justify-center gap-5 p-4">
           <div className="relative">

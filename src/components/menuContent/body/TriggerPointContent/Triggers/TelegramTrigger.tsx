@@ -1,10 +1,17 @@
-export default function TelegramTrigger() {
+interface TelegramTriggerProps {
+  isOpen: boolean
+  onToggle: () => void
+}
+
+export default function TelegramTrigger({ isOpen, onToggle }: TelegramTriggerProps) {
   return (
     <div className="w-[600px] mx-auto rounded-2xl p-[1px] bg-gradient-to-r from-cyan-500/30 via-cyan-400/10 to-teal-500/30">
       <button
         type="button"
         aria-label="Telegram trigger"
-        className="group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition"
+        className="cursor-pointer group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-cyan-400/30 transition"
+        onClick={onToggle}
+        aria-expanded={isOpen}
       >
         <div className="flex items-center justify-center gap-5 p-4">
           <div className="relative">

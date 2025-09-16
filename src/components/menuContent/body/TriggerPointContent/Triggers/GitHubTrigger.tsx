@@ -1,15 +1,20 @@
-import { useState } from 'react'
 import TriggerGitHubForm from '../TriggerGitHubForm'
 
-export default function GitHubTrigger() {
-  const [isOpen, setIsOpen] = useState(false)
+interface GitHubTriggerProps {
+  isOpen: boolean
+  onToggle: () => void
+  value: string
+  onValueChange: (value: string) => void
+}
+
+export default function GitHubTrigger({ isOpen, onToggle, value, onValueChange }: GitHubTriggerProps) {
   return (
     <div className="w-[600px] mx-auto rounded-2xl p-[1px] bg-gradient-to-r from-zinc-500/30 via-zinc-400/10 to-slate-500/30">
       <button
         type="button"
         aria-label="GitHub trigger"
-        className="group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition"
-        onClick={() => setIsOpen((v) => !v)}
+        className="cursor-pointer group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-slate-400/30 transition"
+        onClick={onToggle}
         aria-expanded={isOpen}
       >
         <div className="flex items-center justify-center gap-5 p-4">
@@ -37,7 +42,7 @@ export default function GitHubTrigger() {
       </button>
       {isOpen && (
         <div className="mt-3 rounded-2xl bg-gradient-to-b from-white to-gray-50 shadow-md">
-          <TriggerGitHubForm />
+          <TriggerGitHubForm value={value} onValueChange={onValueChange} />
         </div>
       )}
     </div>

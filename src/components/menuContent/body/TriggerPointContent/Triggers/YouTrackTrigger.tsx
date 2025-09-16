@@ -1,15 +1,20 @@
-import { useState } from 'react'
 import TriggerYouTrackForm from '../TriggerYouTrackForm'
 
-export default function YouTrackTrigger() {
-  const [isOpen, setIsOpen] = useState(false)
+interface YouTrackTriggerProps {
+  isOpen: boolean
+  onToggle: () => void
+  value: string
+  onValueChange: (value: string) => void
+}
+
+export default function YouTrackTrigger({ isOpen, onToggle, value, onValueChange }: YouTrackTriggerProps) {
   return (
     <div className="w-[600px] mx-auto rounded-2xl p-[1px] bg-gradient-to-r from-pink-500/30 via-pink-400/10 to-fuchsia-500/30">
       <button
         type="button"
         aria-label="YouTrack trigger"
-        className="group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-pink-400/30 transition"
-        onClick={() => setIsOpen((v) => !v)}
+        className="group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-pink-400/30 transition cursor-pointer"
+        onClick={onToggle}
         aria-expanded={isOpen}
       >
         <div className="flex items-center justify-center gap-5 p-4">
@@ -40,7 +45,7 @@ export default function YouTrackTrigger() {
       </button>
       {isOpen && (
         <div className="mt-3 rounded-2xl bg-gradient-to-b from-white to-gray-50 shadow-md">
-          <TriggerYouTrackForm />
+          <TriggerYouTrackForm value={value} onValueChange={onValueChange} />
         </div>
       )}
     </div>

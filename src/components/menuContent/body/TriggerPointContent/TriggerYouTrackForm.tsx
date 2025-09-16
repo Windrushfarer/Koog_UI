@@ -1,14 +1,15 @@
-import { useState } from 'react'
 import Input from '../../../ui/Input'
 
-export default function TriggerYouTrackForm() {
-  const [project, setProject] = useState('')
-  const [query, setQuery] = useState('')
+interface TriggerYouTrackFormProps {
+  value: string
+  onValueChange: (value: string) => void
+}
 
+export default function TriggerYouTrackForm({ value, onValueChange }: TriggerYouTrackFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     // eslint-disable-next-line no-console
-    console.log('YouTrack create trigger', { project, query })
+    console.log('YouTrack create trigger', { project: value })
   }
 
   return (
@@ -16,8 +17,8 @@ export default function TriggerYouTrackForm() {
       <div className="rounded-2xl bg-neutral-900/95 border border-[#B191FF]/30 p-5 backdrop-blur-xl shadow-[0_0_12px_#B191FF]/30 hover:shadow-[0_0_18px_#B191FF]/40 focus-within:shadow-[0_0_24px_#B191FF]/50 transition">
         <Input
           placeholder="Enter filters"
-          value={project}
-          onChange={(e) => setProject(e.target.value)}
+          value={value}
+          onChange={(e) => onValueChange(e.target.value)}
         />
       </div>
     </form>
