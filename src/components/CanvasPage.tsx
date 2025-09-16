@@ -270,7 +270,7 @@ export default function CanvasPage() {
       }
       if (e.key.toLowerCase() === "c") {
         setPendingTemplateId(null);
-        setMode("connect");
+        setMode(m => m === "connect" ? "select" : "connect");
       }
       if (e.key === "Escape") {
         if ((mode === "add-node" && currentTemplate) || mode === "connect") {
@@ -298,6 +298,42 @@ export default function CanvasPage() {
   }, [selection, mode, currentTemplate, editingLabelId, commitLabelEdit]);
 
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  const resolveConnection = useCallback(
+    (firstId, secondId) => {
+      if (!firstId || !secondId || firstId === secondId) return null;
+      const first = nodeMap.get(firstId);
+      const second = nodeMap.get(secondId);
+      if (!first || !second) return null;
+
+      const firstIsStart = first.id === START_NODE_ID;
+      const secondIsStart = second.id === START_NODE_ID;
+      if (firstIsStart && secondIsStart) return null;
+
+      const firstIsFinish = first.id === FINISH_NODE_ID;
+      const secondIsFinish = second.id === FINISH_NODE_ID;
+      if (firstIsFinish && secondIsFinish) return null;
+
+      let source = first;
+      let target = second;
+
+      if (firstIsStart || secondIsStart) {
+        source = firstIsStart ? first : second;
+        target = firstIsStart ? second : first;
+      }
+
+      if (firstIsFinish || secondIsFinish) {
+        target = firstIsFinish ? first : second;
+        source = firstIsFinish ? second : first;
+      }
+
+      if (source.id === target.id) {
+        return null;
+      }
+
+      return { source, target };
+    },
+    [nodeMap]
+  );
 
   const computeNodePreviewPosition = useCallback((point) => {
     const halfWidth = NODE_WIDTH / 2;
@@ -577,31 +613,31 @@ export default function CanvasPage() {
         setConnectPreview(pw);
         return;
       } else if (connectSourceId && connectSourceId !== id) {
-        const sourceNode = nodes.find((n) => n.id === connectSourceId);
-        const destNode = nodes.find((n) => n.id === id);
-        if (sourceNode && destNode) {
+        const connection = resolveConnection(connectSourceId, id);
+        if (connection) {
+          const { source, target } = connection;
           let createdEdgeId = null;
           setEdges((prev) => {
             const duplicate = prev.some(
               (ed) =>
-                (ed.sourceId === sourceNode.id && ed.targetId === destNode.id) || (ed.sourceId === destNode.id && ed.targetId === sourceNode.id)
+                (ed.sourceId === source.id && ed.targetId === target.id) || (ed.sourceId === target.id && ed.targetId === source.id)
             );
             if (duplicate) {
               return prev;
             }
-            const a = fixedOutputAnchor(sourceNode);
-            const b = fixedInputAnchor(destNode);
+            const a = fixedOutputAnchor(source);
+            const b = fixedInputAnchor(target);
             const cp = defaultControlPoint(a, b, 60);
             const edgeId = uid();
             createdEdgeId = edgeId;
-            return prev.concat({ id: edgeId, sourceId: sourceNode.id, targetId: destNode.id, cx: cp.cx, cy: cp.cy });
+            return prev.concat({ id: edgeId, sourceId: source.id, targetId: target.id, cx: cp.cx, cy: cp.cy });
           });
           if (createdEdgeId) {
             setSelection({ type: "edge", id: createdEdgeId });
           } else {
             const existing = edges.find(
               (ed) =>
-                (ed.sourceId === sourceNode.id && ed.targetId === destNode.id) || (ed.sourceId === destNode.id && ed.targetId === sourceNode.id)
+                (ed.sourceId === source.id && ed.targetId === target.id) || (ed.sourceId === target.id && ed.targetId === source.id)
             );
             if (existing) {
               setSelection({ type: "edge", id: existing.id });
@@ -610,6 +646,9 @@ export default function CanvasPage() {
             setConnectPreview(null);
           }
           activateSelectMode();
+        } else {
+          setConnectSourceId(null);
+          setConnectPreview(null);
         }
         return;
       }
