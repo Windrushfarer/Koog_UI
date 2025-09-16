@@ -18,6 +18,8 @@ const BG_EXTENT = 100000; // big world rect for full-bleed grid
 const WORLD = { minX: -3000, minY: -3000, maxX: 3000, maxY: 3000 };
 const NODE_WIDTH = 168;
 const NODE_HEIGHT = 72;
+const START_NODE_ID= "agent-start-node"
+const FINISH_NODE_ID= "agent-finish-node"
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const snap = (v, step = GRID) => Math.round(v / step) * step;
@@ -155,8 +157,8 @@ export default function CanvasPage() {
   const [mode, setMode] = useState("select"); // 'select' | 'add-node' | 'connect'
   const [pendingTemplateId, setPendingTemplateId] = useState(null);
   const [nodes, setNodes] = useState([
-    { id: uid(), x: 140, y: 120, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Start" },
-    { id: uid(), x: 460, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Finish" },
+    { id: START_NODE_ID, x: 140, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Start" },
+    { id: FINISH_NODE_ID, x: 480, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Finish" },
   ]);
   const [edges, setEdges] = useState([]);
 
@@ -167,6 +169,8 @@ export default function CanvasPage() {
   const [connectPreview, setConnectPreview] = useState(null);
   const [nodePreview, setNodePreview] = useState(null);
   const [isPointerInsideCanvas, setIsPointerInsideCanvas] = useState(false);
+  const [editingLabelId, setEditingLabelId] = useState(null);
+  const [editingLabelValue, setEditingLabelValue] = useState("");
 
   // Drag state: 'node' | 'ctrl' | 'pan'
   const dragRef = useRef({ type: null, id: null, dx: 0, dy: 0, t: 0.5 });
@@ -176,6 +180,23 @@ export default function CanvasPage() {
   const panDeltaRef = useRef({ dx: 0, dy: 0 });
   const panRafRef = useRef(0);
   const lastPointerWorldRef = useRef(null);
+  const editingInputRef = useRef(null);
+
+  const commitLabelEdit = useCallback(
+    (commit = true) => {
+      setEditingLabelId((currentId) => {
+        if (!currentId) return null;
+        if (commit) {
+          const value = editingLabelValue.trim();
+          const nextLabel = value.length ? value : "Untitled";
+          setNodes((prev) => prev.map((n) => (n.id === currentId ? { ...n, label: nextLabel } : n)));
+        }
+        setEditingLabelValue("");
+        return null;
+      });
+    },
+    [editingLabelValue, setNodes, setEditingLabelValue]
+  );
 
   const currentTemplate = useMemo(
     () => paletteTemplates.find((tpl) => tpl.id === pendingTemplateId) || null,
@@ -231,6 +252,10 @@ export default function CanvasPage() {
   // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e) => {
+      const editingActive = editingLabelId && editingInputRef.current === document.activeElement;
+      if (editingActive && e.key !== "Escape") {
+        return;
+      }
       if (e.code === "Space") {
         e.preventDefault();
         setSpacePressed(true);
@@ -254,6 +279,10 @@ export default function CanvasPage() {
           e.preventDefault();
           activateSelectMode();
         }
+        if (editingLabelId) {
+          e.preventDefault();
+          commitLabelEdit(false);
+        }
       }
     };
     const onKeyUp = (e) => {
@@ -268,7 +297,7 @@ export default function CanvasPage() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [selection, mode, currentTemplate]);
+  }, [selection, mode, currentTemplate, editingLabelId, commitLabelEdit]);
 
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
@@ -279,6 +308,22 @@ export default function CanvasPage() {
     const y = clamp(point.y - halfHeight, WORLD.minY, WORLD.maxY - NODE_HEIGHT);
     return { x, y };
   }, []);
+
+  const startEditingLabel = useCallback(
+    (nodeId) => {
+      const node = nodeMap.get(nodeId);
+      if (!node) return;
+      const label = (node.label || "").trim();
+      const lower = label.toLowerCase();
+      if (!label || lower === "start" || lower === "finish") {
+        return;
+      }
+      setEditingLabelId(nodeId);
+      setEditingLabelValue(label);
+      setSelection({ type: "node", id: nodeId });
+    },
+    [nodeMap, setSelection, setEditingLabelValue]
+  );
 
   useEffect(() => {
     if (!connectSourceId) {
@@ -301,6 +346,16 @@ export default function CanvasPage() {
       setNodePreview(computeNodePreviewPosition(lastPointerWorldRef.current));
     }
   }, [spacePressed, mode, currentTemplate, isPointerInsideCanvas, computeNodePreviewPosition]);
+
+  useEffect(() => {
+    if (editingLabelId && editingInputRef.current) {
+      const handle = requestAnimationFrame(() => {
+        editingInputRef.current?.focus();
+        editingInputRef.current?.select();
+      });
+      return () => cancelAnimationFrame(handle);
+    }
+  }, [editingLabelId]);
 
   function getSvgPointInWorld(clientX, clientY) {
     const svg = svgRef.current;
@@ -506,6 +561,9 @@ export default function CanvasPage() {
   const onNodePointerDown = (e, id) => {
     if (spacePressed) return;
     e.stopPropagation();
+    if (editingLabelId) {
+      commitLabelEdit();
+    }
     const pw = getWorldPoint(e.clientX, e.clientY);
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
@@ -684,7 +742,7 @@ export default function CanvasPage() {
                   <path
                     d={g.d}
                     stroke="transparent"
-                    strokeWidth={16}
+                    strokeWidth={24}
                     fill="none"
                     style={{ pointerEvents: "stroke", cursor: !isSelected ? (isHovered ? "pointer" : "default") : "default" }}
                     onClick={(e) => onEdgeClick(e, edge.id)}
@@ -745,6 +803,12 @@ export default function CanvasPage() {
               const isSelected = selection.type === "node" && selection.id === n.id;
               const isHovered = hover.type === "node" && hover.id === n.id;
               const stroke = isSelected ? selectedBlue : isHovered ? lightBlue : baseStroke;
+              const labelId = (n.id ?? "").trim();
+              const labelLower = labelId.toLowerCase();
+              const isPredefinedNode = labelLower === START_NODE_ID || labelLower === FINISH_NODE_ID;
+              const canEditLabel = Boolean(labelId) && !isPredefinedNode;
+              const isEditingLabel = canEditLabel && editingLabelId === n.id;
+              const displayLabel = n.label || "Untitled";
               const desiredCursor = mode === "connect" ? "crosshair" : !isSelected && isHovered ? "pointer" : "grab";
               return (
                 <g
@@ -755,6 +819,50 @@ export default function CanvasPage() {
                   onPointerLeave={onNodeLeave}
                   style={{ cursor: spacePressed ? (dragRef.current.type === "pan" ? "grabbing" : "grab") : desiredCursor }}
                 >
+                  {canEditLabel ? (
+                    isEditingLabel ? (
+                      <foreignObject x={n.x} y={n.y - 28} width={n.width} height={24} style={{ overflow: "visible" }}>
+                        <input
+                          ref={editingInputRef}
+                          value={editingLabelValue}
+                          onChange={(e) => setEditingLabelValue(e.target.value.replace(/\n/g, ""))}
+                          onBlur={() => commitLabelEdit()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitLabelEdit();
+                            } else if (e.key === "Escape") {
+                              e.preventDefault();
+                              commitLabelEdit(false);
+                            }
+                          }}
+                          className="w-full text-center text-[11px] font-medium rounded-full bg-neutral-800 text-neutral-200 border border-neutral-700 px-2 py-1 outline-none focus:ring-1 focus:ring-sky-500"
+                          style={{ lineHeight: "1.2", height: "20px" }}
+                        />
+                      </foreignObject>
+                    ) : (
+                      <text
+                        x={n.x + n.width / 2}
+                        y={n.y - 8}
+                        textAnchor="middle"
+                        fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                        fontSize={15}
+                        fill="#94a3b8"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          // if (mode !== "select") return;
+                          startEditingLabel(n.id);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        style={{
+                          userSelect: mode === "select" ? "none" : "auto",
+                          cursor: mode === "select" ? "text" : "default",
+                        }}
+                      >
+                        {displayLabel}
+                      </text>
+                    )
+                  ) : null}
                   <rect
                     x={n.x}
                     y={n.y}
@@ -766,16 +874,18 @@ export default function CanvasPage() {
                     stroke={stroke}
                     strokeWidth={isSelected ? 2.5 : 1.5}
                   />
-                  <text
-                    x={n.x + n.width / 2}
-                    y={n.y + n.height / 2 + 4}
-                    textAnchor="middle"
-                    fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                    fontSize={13}
-                    fill={nodeText}
-                  >
-                    {n.label}
-                  </text>
+                  {isPredefinedNode ? (
+                    <text
+                      x={n.x + n.width / 2}
+                      y={n.y + n.height / 2 + 4}
+                      textAnchor="middle"
+                      fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                      fontSize={18}
+                      fill={nodeText}
+                    >
+                      {displayLabel}
+                    </text>
+                  ) : null}
                 </g>
               );
             })}
