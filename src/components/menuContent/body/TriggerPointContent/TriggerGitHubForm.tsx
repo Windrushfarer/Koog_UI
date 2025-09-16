@@ -1,13 +1,15 @@
-import { useState } from 'react'
 import Input from '../../../ui/Input'
 
-export default function TriggerGitHubForm() {
-  const [filters, setFilters] = useState('')
+interface TriggerGitHubFormProps {
+  value: string
+  onValueChange: (value: string) => void
+}
 
+export default function TriggerGitHubForm({ value, onValueChange }: TriggerGitHubFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     // eslint-disable-next-line no-console
-    console.log('GitHub create trigger', { filters })
+    console.log('GitHub create trigger', { filters: value })
   }
 
   return (
@@ -15,8 +17,8 @@ export default function TriggerGitHubForm() {
       <div>
         <Input
           placeholder="Enter repository"
-          value={filters}
-          onChange={(e) => setFilters(e.target.value)}
+          value={value}
+          onChange={(e) => onValueChange(e.target.value)}
         />
       </div>
     </form>
