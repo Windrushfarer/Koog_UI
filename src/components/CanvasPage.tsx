@@ -115,10 +115,12 @@ const PaletteButton = ({ template, active, onSelect }) => {
       type="button"
       onClick={() => onSelect(template.id)}
       className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition shadow-sm ${
-        active ? "bg-sky-50 border-sky-200 text-sky-700" : "bg-white/90 border-neutral-200 hover:border-neutral-300 text-neutral-700"
+        active
+          ? "bg-sky-900/30 border-sky-500 text-sky-200"
+          : "bg-neutral-800 border-neutral-700 hover:border-neutral-500 text-neutral-200"
       }`}
     >
-      <Icon className={active ? "w-4 h-4 text-sky-600" : "w-4 h-4 text-neutral-500"} />
+      <Icon className={active ? "w-4 h-4 text-sky-300" : "w-4 h-4 text-neutral-400"} />
       <span>{template.label}</span>
     </button>
   );
@@ -129,7 +131,9 @@ const ModeButton = ({ name, value, hotkey, current, onSelect }) => (
     type="button"
     onClick={() => onSelect(value)}
     className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
-      current === value ? "bg-neutral-900 text-white border-neutral-900" : "bg-white/95 border-neutral-200 hover:border-neutral-300"
+      current === value
+        ? "bg-sky-600/80 text-white border-sky-500"
+        : "bg-neutral-800 text-neutral-200 border-neutral-700 hover:border-neutral-500"
     }`}
     title={hotkey ? `${name} (${hotkey})` : name}
   >
@@ -151,17 +155,10 @@ export default function CanvasPage() {
   const [mode, setMode] = useState("select"); // 'select' | 'add-node' | 'connect'
   const [pendingTemplateId, setPendingTemplateId] = useState(null);
   const [nodes, setNodes] = useState([
-    { id: uid(), x: 140, y: 120, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Node A" },
-    { id: uid(), x: 460, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Node B" },
+    { id: uid(), x: 140, y: 120, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Start" },
+    { id: uid(), x: 460, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Finish" },
   ]);
-  const [edges, setEdges] = useState(() => {
-    const s = 0;
-    const t = 1;
-    const p0 = rectBorderAnchor(nodes[s], nodes[t].x, nodes[t].y);
-    const p2 = rectBorderAnchor(nodes[t], nodes[s].x, nodes[s].y);
-    const cp = defaultControlPoint(p0, p2, 60);
-    return [{ id: uid(), sourceId: nodes[s].id, targetId: nodes[t].id, cx: cp.cx, cy: cp.cy }];
-  });
+  const [edges, setEdges] = useState([]);
 
   // Selection & hover
   const [selection, setSelection] = useState({ type: null, id: null }); // 'node' | 'edge' | null
@@ -547,7 +544,6 @@ export default function CanvasPage() {
           });
           if (createdEdgeId) {
             setSelection({ type: "edge", id: createdEdgeId });
-            activateSelectMode();
           } else {
             const existing = edges.find(
               (ed) =>
@@ -618,24 +614,26 @@ export default function CanvasPage() {
     return { d, p0, p2, c, tMid, mid };
   }
 
-  const lightBlue = "#7dd3fc";
+  const lightBlue = "#38bdf8";
   const selectedBlue = "#0ea5e9";
-  const baseStroke = "#111827";
+  const baseStroke = "#94a3b8";
+  const nodeFill = "#1e293b";
+  const nodeText = "#e2e8f0";
 
   const { scale, panX, panY } = view;
   const humanMode = mode === "connect" ? "Connect" : mode === "add-node" && currentTemplate ? `Add ${currentTemplate.label}` : mode === "add-node" ? "Add node" : "Select/Move";
 
   return (
-    <div className="w-full h-[100vh] bg-neutral-50 flex flex-col">
+    <div className="w-full h-[100vh] bg-neutral-950 flex flex-col text-neutral-100">
       <div className="flex-1 relative">
         <div className="absolute top-6 left-6 z-30">
-          <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white/95 px-3 py-2 shadow-md backdrop-blur">
+          <div className="flex items-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900/90 px-3 py-2 shadow-lg backdrop-blur">
             <ModeButton name="Connect" value="connect" hotkey="C" current={mode} onSelect={activateConnectMode} />
           </div>
         </div>
 
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30">
-          <div className="flex items-center gap-2 rounded-3xl border border-neutral-200 bg-white/95 px-4 py-2 shadow-lg backdrop-blur">
+          <div className="flex items-center gap-2 rounded-3xl border border-neutral-800 bg-neutral-900/95 px-4 py-2 shadow-xl backdrop-blur">
             {paletteTemplates.map((template) => (
               <PaletteButton
                 key={template.id}
@@ -646,7 +644,7 @@ export default function CanvasPage() {
             ))}
           </div>
           {mode !== "select" ? (
-            <div className="mt-2 text-[12px] text-neutral-500 text-center">Press Esc to stop action.</div>
+            <div className="mt-2 text-[12px] text-neutral-400 text-center">Press Esc to stop action.</div>
           ) : null}
         </div>
 
@@ -668,7 +666,7 @@ export default function CanvasPage() {
         >
           <defs>
             <pattern id="grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
-              <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="#e5e7eb" strokeWidth="1" />
+              <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="#1f2937" strokeWidth="1" />
             </pattern>
           </defs>
 
@@ -696,7 +694,7 @@ export default function CanvasPage() {
                   <path d={g.d} stroke={stroke} strokeWidth={2} fill="none" />
                   {isSelected && (
                     <g style={{ cursor: "grab" }} onPointerDown={(e) => onEdgeHandlePointerDown(e, edge.id, 0.5)}>
-                      <circle cx={g.mid.x} cy={g.mid.y} r={6} fill="#fff" stroke="#0369a1" strokeWidth={2} />
+                      <circle cx={g.mid.x} cy={g.mid.y} r={6} fill={nodeFill} stroke={selectedBlue} strokeWidth={2} />
                     </g>
                   )}
                 </g>
@@ -723,11 +721,11 @@ export default function CanvasPage() {
                   height={NODE_HEIGHT}
                   rx={16}
                   ry={16}
-                  fill="#fff"
-                  fillOpacity={0.6}
+                  fill={nodeFill}
+                  fillOpacity={0.4}
                   stroke={selectedBlue}
                   strokeWidth={1.5}
-                  strokeOpacity={0.5}
+                  strokeOpacity={0.6}
                 />
                 <text
                   x={nodePreview.x + NODE_WIDTH / 2}
@@ -735,8 +733,8 @@ export default function CanvasPage() {
                   textAnchor="middle"
                   fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
                   fontSize={13}
-                  fill="#0369a1"
-                  fillOpacity={0.6}
+                  fill="#bae6fd"
+                  fillOpacity={0.7}
                 >
                   {currentTemplate.label}
                 </text>
@@ -764,7 +762,7 @@ export default function CanvasPage() {
                     height={n.height}
                     rx={16}
                     ry={16}
-                    fill="#fff"
+                    fill={nodeFill}
                     stroke={stroke}
                     strokeWidth={isSelected ? 2.5 : 1.5}
                   />
@@ -774,7 +772,7 @@ export default function CanvasPage() {
                     textAnchor="middle"
                     fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
                     fontSize={13}
-                    fill="#111827"
+                    fill={nodeText}
                   >
                     {n.label}
                   </text>
@@ -784,11 +782,11 @@ export default function CanvasPage() {
           </g>
         </svg>
 
-        <div className="absolute bottom-2 left-2 text-[11px] bg-white/80 backdrop-blur px-2 py-1 rounded-md border text-neutral-600">
+        <div className="absolute bottom-2 left-2 text-[11px] bg-neutral-900/80 backdrop-blur px-2 py-1 rounded-md border border-neutral-700 text-neutral-300">
           Mode: <span className="font-semibold">{humanMode}</span>
           {mode === "connect" && connectSourceId ? <span className="ml-2">(pick a target)</span> : null}
         </div>
-        <div className="absolute bottom-2 right-2 text-[11px] bg-white/80 backdrop-blur px-2 py-1 rounded-md border text-neutral-800">
+        <div className="absolute bottom-2 right-2 text-[11px] bg-neutral-900/80 backdrop-blur px-2 py-1 rounded-md border border-neutral-700 text-neutral-200">
           {Math.round(scale * 100)}%
         </div>
       </div>
