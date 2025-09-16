@@ -167,6 +167,7 @@ export default function CanvasPage() {
   const [selection, setSelection] = useState({ type: null, id: null }); // 'node' | 'edge' | null
   const [hover, setHover] = useState({ type: null, id: null }); // 'node' | 'edge' | null
   const [connectSourceId, setConnectSourceId] = useState(null);
+  const [connectPreview, setConnectPreview] = useState(null);
 
   // Drag state: 'node' | 'ctrl' | 'pan'
   const dragRef = useRef({ type: null, id: null, dx: 0, dy: 0, t: 0.5 });
@@ -264,6 +265,18 @@ export default function CanvasPage() {
   }, [selection]);
 
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+
+  useEffect(() => {
+    if (!connectSourceId) {
+      setConnectPreview(null);
+    }
+  }, [connectSourceId]);
+
+  useEffect(() => {
+    if (mode !== "connect") {
+      setConnectPreview(null);
+    }
+  }, [mode]);
 
   function getSvgPointInWorld(clientX, clientY) {
     const svg = svgRef.current;
@@ -367,6 +380,8 @@ export default function CanvasPage() {
   const activateConnectMode = () => {
     setMode("connect");
     setPendingTemplateId(null);
+    setConnectSourceId(null);
+    setConnectPreview(null);
   };
   const activateTemplate = (templateId) => {
     if (mode === "add-node" && pendingTemplateId === templateId) {
@@ -389,6 +404,13 @@ export default function CanvasPage() {
       e.preventDefault();
     }
   };
+  const onSVGPointerMove = (e) => {
+    if (spacePressed) return;
+    if (mode === "connect" && connectSourceId) {
+      const pw = getWorldPoint(e.clientX, e.clientY);
+      setConnectPreview(pw);
+    }
+  };
   const onSVGPointerUp = (e) => {
     const svg = svgRef.current;
     if (!svg) return;
@@ -396,6 +418,12 @@ export default function CanvasPage() {
       try {
         svg.releasePointerCapture(e.pointerId);
       } catch {}
+    }
+  };
+
+  const onSVGPointerLeave = () => {
+    if (mode === "connect") {
+      setConnectPreview(null);
     }
   };
 
@@ -433,19 +461,46 @@ export default function CanvasPage() {
       if (!connectSourceId) {
         setConnectSourceId(id);
         setSelection({ type: "node", id });
+        const pw = getWorldPoint(e.clientX, e.clientY);
+        setConnectPreview(pw);
+        return;
       } else if (connectSourceId && connectSourceId !== id) {
-        const s = nodes.find((n) => n.id === connectSourceId);
-        const t = nodes.find((n) => n.id === id);
-        if (s && t) {
-          const a = rectBorderAnchor(s, t.x + t.width / 2, t.y + t.height / 2);
-          const b = rectBorderAnchor(t, s.x + s.width / 2, s.y + s.height / 2);
-          const cp = defaultControlPoint(a, b, 60);
-          const edgeId = uid();
-          setEdges((prev) => prev.concat({ id: edgeId, sourceId: s.id, targetId: t.id, cx: cp.cx, cy: cp.cy }));
-          setSelection({ type: "edge", id: edgeId });
+        const sourceNode = nodes.find((n) => n.id === connectSourceId);
+        const destNode = nodes.find((n) => n.id === id);
+        if (sourceNode && destNode) {
+          let createdEdgeId = null;
+          setEdges((prev) => {
+            const duplicate = prev.some(
+              (ed) =>
+                (ed.sourceId === sourceNode.id && ed.targetId === destNode.id) || (ed.sourceId === destNode.id && ed.targetId === sourceNode.id)
+            );
+            if (duplicate) {
+              return prev;
+            }
+            const a = rectBorderAnchor(sourceNode, destNode.x + destNode.width / 2, destNode.y + destNode.height / 2);
+            const b = rectBorderAnchor(destNode, sourceNode.x + sourceNode.width / 2, sourceNode.y + sourceNode.height / 2);
+            const cp = defaultControlPoint(a, b, 60);
+            const edgeId = uid();
+            createdEdgeId = edgeId;
+            return prev.concat({ id: edgeId, sourceId: sourceNode.id, targetId: destNode.id, cx: cp.cx, cy: cp.cy });
+          });
+          if (createdEdgeId) {
+            setSelection({ type: "edge", id: createdEdgeId });
+            activateSelectMode();
+          } else {
+            const existing = edges.find(
+              (ed) =>
+                (ed.sourceId === sourceNode.id && ed.targetId === destNode.id) || (ed.sourceId === destNode.id && ed.targetId === sourceNode.id)
+            );
+            if (existing) {
+              setSelection({ type: "edge", id: existing.id });
+            }
+            setConnectSourceId(null);
+            setConnectPreview(null);
+          }
+          activateSelectMode();
         }
-        setConnectSourceId(null);
-        activateSelectMode();
+        return;
       }
     } else {
       setSelection({ type: "node", id });
@@ -478,6 +533,15 @@ export default function CanvasPage() {
   };
 
   const nodeMapRender = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  const connectPreviewPath = useMemo(() => {
+    if (mode !== "connect" || !connectSourceId || !connectPreview) return null;
+    const source = nodeMapRender.get(connectSourceId);
+    if (!source) return null;
+    const start = rectBorderAnchor(source, connectPreview.x, connectPreview.y);
+    const cp = defaultControlPoint(start, connectPreview, 60);
+    const d = `M ${start.x} ${start.y} Q ${cp.cx} ${cp.cy} ${connectPreview.x} ${connectPreview.y}`;
+    return { d };
+  }, [mode, connectSourceId, connectPreview, nodeMapRender]);
   function edgeGeometry(edge) {
     const s = nodeMapRender.get(edge.sourceId);
     const t = nodeMapRender.get(edge.targetId);
@@ -501,7 +565,7 @@ export default function CanvasPage() {
   const humanMode = mode === "connect" ? "Connect" : mode === "add-node" && currentTemplate ? `Add ${currentTemplate.label}` : mode === "add-node" ? "Add node" : "Select/Move";
 
   return (
-    <div className="w-full h-[88vh] max-h-[88vh] bg-neutral-50 flex flex-col">
+    <div className="w-full h-[100vh] bg-neutral-50 flex flex-col">
       <div className="flex-1 relative">
         <div className="absolute top-6 left-6 z-30">
           <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white/95 px-3 py-2 shadow-md backdrop-blur">
@@ -528,7 +592,9 @@ export default function CanvasPage() {
           className="w-full h-full"
           onWheel={onWheel}
           onPointerDown={onSVGPointerDown}
+          onPointerMove={onSVGPointerMove}
           onPointerUp={onSVGPointerUp}
+          onPointerLeave={onSVGPointerLeave}
           onClick={onSVGClick}
           style={{
             touchAction: "none",
@@ -540,9 +606,6 @@ export default function CanvasPage() {
             <pattern id="grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
               <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="#e5e7eb" strokeWidth="1" />
             </pattern>
-            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" />
-            </marker>
           </defs>
 
           <g transform={`translate(${panX} ${panY}) scale(${scale})`}>
@@ -566,7 +629,7 @@ export default function CanvasPage() {
                     onPointerEnter={(e) => onEdgeEnter(e, edge.id)}
                     onPointerLeave={onEdgeLeave}
                   />
-                  <path d={g.d} stroke={stroke} strokeWidth={2} fill="none" markerEnd="url(#arrow)" />
+                  <path d={g.d} stroke={stroke} strokeWidth={2} fill="none" />
                   {isSelected && (
                     <g style={{ cursor: "grab" }} onPointerDown={(e) => onEdgeHandlePointerDown(e, edge.id, 0.5)}>
                       <circle cx={g.mid.x} cy={g.mid.y} r={6} fill="#fff" stroke="#0369a1" strokeWidth={2} />
@@ -575,6 +638,17 @@ export default function CanvasPage() {
                 </g>
               );
             })}
+
+            {connectPreviewPath ? (
+              <path
+                d={connectPreviewPath.d}
+                stroke={selectedBlue}
+                strokeWidth={2}
+                fill="none"
+                strokeDasharray="6 6"
+                style={{ pointerEvents: "none" }}
+              />
+            ) : null}
 
             {nodes.map((n) => {
               const isSelected = selection.type === "node" && selection.id === n.id;
