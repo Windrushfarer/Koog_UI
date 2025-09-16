@@ -11,11 +11,10 @@ export default function TriggerSlackForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Filters</label>
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl p-[1px] bg-gradient-to-r from-[#B191FF]/30 via-transparent to-[#B191FF]/30 shadow-[0_0_24px_#B191FF]/30">
+      <div className="rounded-2xl bg-neutral-900/95 border border-[#B191FF]/30 p-5 backdrop-blur-xl shadow-[0_0_12px_#B191FF]/30 hover:shadow-[0_0_18px_#B191FF]/40 focus-within:shadow-[0_0_24px_#B191FF]/50 transition">
         <Input
-          placeholder="Enter filters"
+          placeholder="Enter channel"
           value={filters}
           onChange={(e) => setFilters(e.target.value)}
         />

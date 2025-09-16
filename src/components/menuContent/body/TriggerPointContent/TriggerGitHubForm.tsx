@@ -11,11 +11,10 @@ export default function TriggerGitHubForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl bg-neutral-900/95 border p-5 backdrop-blur-xl">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Filters</label>
         <Input
-          placeholder="Enter filters"
+          placeholder="Enter repository"
           value={filters}
           onChange={(e) => setFilters(e.target.value)}
         />

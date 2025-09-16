@@ -1,26 +1,26 @@
 export default function GoogleCalendarTrigger() {
   return (
-    <div className="w-[600px] mx-auto rounded-2xl p-[1px] bg-gradient-to-r from-sky-200/60 via-sky-50 to-blue-200/60">
+    <div className="w-[600px] mx-auto rounded-2xl p-[1px] bg-gradient-to-r from-sky-500/30 via-sky-400/10 to-blue-500/30">
       <button
         type="button"
         aria-label="Google Calendar trigger"
-        className="group w-full rounded-2xl bg-gradient-to-b from-white to-gray-50 hover:from-white hover:to-gray-50 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-slate-300 transition"
+        className="group w-full rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-800 hover:from-neutral-900 hover:to-neutral-800 shadow-md hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-sky-400/30 transition"
       >
         <div className="flex items-center justify-center gap-5 p-4">
           <div className="relative">
-            <span className="absolute -inset-3 -z-10 rounded-2xl bg-sky-200/30 blur-xl opacity-0 group-hover:opacity-100 transition" />
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-b from-white to-gray-50 shadow-md">
+            <span className="absolute -inset-3 -z-10 rounded-2xl bg-sky-400/30 blur-xl opacity-0 group-hover:opacity-100 transition" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-b from-neutral-900 to-neutral-800 shadow-md">
               <img src="/Google-Calendar-logo.png" alt="Google Calendar logo" className="h-10 w-10 object-contain" />
             </div>
           </div>
           <div className="flex-1 text-left">
             <div className="flex items-center gap-2">
-              <div className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Google Calendar</div>
-              <span className="hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">To be implemented</span>
+              <div className="text-lg sm:text-xl font-semibold text-neutral-100 tracking-tight">Google Calendar</div>
+              <span className="hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">To be implemented</span>
             </div>
-            <div className="text-sm text-gray-500 mt-0.5">Trigger on new events, changes, and reminders</div>
+            <div className="text-sm text-neutral-300 mt-0.5">Trigger on new events, changes, and reminders</div>
           </div>
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-b from-white to-gray-50 border border-gray-200 text-gray-400 transition group-hover:text-sky-600 group-hover:border-sky-200">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-b from-neutral-900 to-neutral-800 border border-neutral-700 text-neutral-400 transition group-hover:text-sky-300 group-hover:border-sky-400/40">
             <svg
               className="w-5 h-5 transition-transform group-hover:translate-x-0.5"
               viewBox="0 0 20 20"
