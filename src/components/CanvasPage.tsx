@@ -407,6 +407,10 @@ export default function CanvasPage() {
     setNodePreview(null);
   };
   const activateConnectMode = () => {
+    if (mode === "connect") {
+      activateSelectMode();
+      return;
+    }
     setMode("connect");
     setPendingTemplateId(null);
     setConnectSourceId(null);
@@ -626,7 +630,6 @@ export default function CanvasPage() {
       <div className="flex-1 relative">
         <div className="absolute top-6 left-6 z-30">
           <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white/95 px-3 py-2 shadow-md backdrop-blur">
-            <ModeButton name="Select/Move" value="select" current={mode} onSelect={activateSelectMode} />
             <ModeButton name="Connect" value="connect" hotkey="C" current={mode} onSelect={activateConnectMode} />
           </div>
         </div>
@@ -642,6 +645,9 @@ export default function CanvasPage() {
               />
             ))}
           </div>
+          {mode !== "select" ? (
+            <div className="mt-2 text-[12px] text-neutral-500 text-center">Press Esc to stop action.</div>
+          ) : null}
         </div>
 
         <svg
