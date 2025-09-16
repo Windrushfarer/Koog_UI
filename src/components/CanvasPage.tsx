@@ -27,16 +27,14 @@ const snap = (v, step = GRID) => Math.round(v / step) * step;
 function nodeCenter(n) {
   return { cx: n.x + n.width / 2, cy: n.y + n.height / 2 };
 }
-function rectBorderAnchor(node, tx, ty) {
+function fixedOutputAnchor(node) {
   const { cx, cy } = nodeCenter(node);
-  const dx = tx - cx;
-  const dy = ty - cy;
-  const halfW = node.width / 2;
-  const halfH = node.height / 2;
-  const px = dx === 0 ? Number.POSITIVE_INFINITY : Math.abs(halfW / dx);
-  const py = dy === 0 ? Number.POSITIVE_INFINITY : Math.abs(halfH / dy);
-  const m = Math.min(px, py);
-  return { x: cx + dx * m, y: cy + dy * m };
+  return { x: cx + node.width / 2, y: cy };
+}
+
+function fixedInputAnchor(node) {
+  const { cx, cy } = nodeCenter(node);
+  return { x: cx - node.width / 2, y: cy };
 }
 function normal2D(x, y) {
   return [-y, x];
@@ -402,10 +400,8 @@ export default function CanvasPage() {
             const s = nodeMap.get(ed.sourceId);
             const t = nodeMap.get(ed.targetId);
             if (!s || !t) return ed;
-            const sC = nodeCenter(s);
-            const tC = nodeCenter(t);
-            const p0 = rectBorderAnchor(s, tC.cx, tC.cy);
-            const p2 = rectBorderAnchor(t, sC.cx, sC.cy);
+            const p0 = fixedOutputAnchor(s);
+            const p2 = fixedInputAnchor(t);
             const snapped = {
               x: clamp(snap(pw.x), WORLD.minX, WORLD.maxX),
               y: clamp(snap(pw.y), WORLD.minY, WORLD.maxY),
@@ -550,7 +546,7 @@ export default function CanvasPage() {
       if (!nodePreview) {
         setNodePreview(placement);
       }
-      setPendingTemplateId(null)
+      setPendingTemplateId(null);
       return;
     }
     setSelection({ type: null, id: null });
@@ -593,8 +589,8 @@ export default function CanvasPage() {
             if (duplicate) {
               return prev;
             }
-            const a = rectBorderAnchor(sourceNode, destNode.x + destNode.width / 2, destNode.y + destNode.height / 2);
-            const b = rectBorderAnchor(destNode, sourceNode.x + sourceNode.width / 2, sourceNode.y + sourceNode.height / 2);
+            const a = fixedOutputAnchor(sourceNode);
+            const b = fixedInputAnchor(destNode);
             const cp = defaultControlPoint(a, b, 60);
             const edgeId = uid();
             createdEdgeId = edgeId;
@@ -652,7 +648,7 @@ export default function CanvasPage() {
     if (mode !== "connect" || !connectSourceId || !connectPreview) return null;
     const source = nodeMapRender.get(connectSourceId);
     if (!source) return null;
-    const start = rectBorderAnchor(source, connectPreview.x, connectPreview.y);
+    const start = fixedOutputAnchor(source);
     const cp = defaultControlPoint(start, connectPreview, 60);
     const d = `M ${start.x} ${start.y} Q ${cp.cx} ${cp.cy} ${connectPreview.x} ${connectPreview.y}`;
     return { d };
@@ -661,10 +657,8 @@ export default function CanvasPage() {
     const s = nodeMapRender.get(edge.sourceId);
     const t = nodeMapRender.get(edge.targetId);
     if (!s || !t) return null;
-    const sC = nodeCenter(s);
-    const tC = nodeCenter(t);
-    const p0 = rectBorderAnchor(s, tC.cx, tC.cy);
-    const p2 = rectBorderAnchor(t, sC.cx, sC.cy);
+    const p0 = fixedOutputAnchor(s);
+    const p2 = fixedInputAnchor(t);
     const c = { x: edge.cx, y: edge.cy };
     const d = `M ${p0.x} ${p0.y} Q ${c.x} ${c.y} ${p2.x} ${p2.y}`;
     const tMid = 0.5;
@@ -850,7 +844,6 @@ export default function CanvasPage() {
                         fill="#94a3b8"
                         onDoubleClick={(e) => {
                           e.stopPropagation();
-                          // if (mode !== "select") return;
                           startEditingLabel(n.id);
                         }}
                         onPointerDown={(e) => e.stopPropagation()}
