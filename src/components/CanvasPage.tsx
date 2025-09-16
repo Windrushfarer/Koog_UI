@@ -1,4 +1,11 @@
-import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
+import type {ReactElement} from 'react';
 
 // Mini Graph Canvas v8 — smooth grab-mode pan + wheel zoom + snap-to-grid + zoom % + full-bleed grid + drag constraints
 // Tweaks: floating palette, connect auto-select, palette-driven add mode, simplified shortcuts.
@@ -18,97 +25,157 @@ const BG_EXTENT = 100000; // big world rect for full-bleed grid
 const WORLD = { minX: -3000, minY: -3000, maxX: 3000, maxY: 3000 };
 const NODE_WIDTH = 168;
 const NODE_HEIGHT = 72;
-const START_NODE_ID= "agent-start-node"
-const FINISH_NODE_ID= "agent-finish-node"
+const START_NODE_ID = "agent-start-node";
+const FINISH_NODE_ID = "agent-finish-node";
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const snap = (v, step = GRID) => Math.round(v / step) * step;
+type Point = { x: number; y: number };
+type NodeData = { id: string; x: number; y: number; width: number; height: number; label: string };
+type EdgeData = { id: string; sourceId: string; targetId: string; cx: number; cy: number };
+type ViewState = { scale: number; panX: number; panY: number };
+type Mode = "select" | "add-node" | "connect";
+type Selection = { type: "node"; id: string } | { type: "edge"; id: string } | { type: null; id: null };
+type HoverState = { type: "node"; id: string } | { type: "edge"; id: string } | { type: null; id: null };
+type DragState =
+  | { type: "node"; id: string; dx: number; dy: number; t: number }
+  | { type: "ctrl"; id: string; dx: number; dy: number; t: number }
+  | { type: "pan"; id: null; dx: number; dy: number; t: number }
+  | { type: null; id: null; dx: number; dy: number; t: number };
 
-function nodeCenter(n) {
+type PanDelta = { dx: number; dy: number };
+type NodeConnection = { source: NodeData; target: NodeData };
+
+type PaletteTemplate = {
+  id: string;
+  label: string;
+  icon: (props: IconProps) => ReactElement;
+};
+
+type IconProps = {
+  className?: string;
+};
+
+type EdgeGeometry = {
+  d: string;
+  p0: Point;
+  p2: Point;
+  c: Point;
+  tMid: number;
+  mid: Point;
+};
+
+type EdgeWithGeometry = {
+  edge: EdgeData;
+  geometry: EdgeGeometry;
+  gradientId: string;
+};
+
+type PathData = { d: string };
+
+const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+const snap = (v: number, step = GRID) => Math.round(v / step) * step;
+
+function nodeCenter(n: NodeData) {
   return { cx: n.x + n.width / 2, cy: n.y + n.height / 2 };
 }
-function fixedOutputAnchor(node) {
+
+function fixedOutputAnchor(node: NodeData): Point {
   const { cx, cy } = nodeCenter(node);
   return { x: cx + node.width / 2, y: cy };
 }
 
-function fixedInputAnchor(node) {
+function fixedInputAnchor(node: NodeData): Point {
   const { cx, cy } = nodeCenter(node);
   return { x: cx - node.width / 2, y: cy };
 }
-function normal2D(x, y) {
+
+function normal2D(x: number, y: number): [number, number] {
   return [-y, x];
 }
-function vecNormalize(x, y) {
+
+function vecNormalize(x: number, y: number): [number, number] {
   const L = Math.hypot(x, y) || 1;
   return [x / L, y / L];
 }
-function defaultControlPoint(p0, p2, bump = 80) {
+
+function defaultControlPoint(p0: Point, p2: Point, bump = 80): Point {
   const mx = (p0.x + p2.x) / 2;
   const my = (p0.y + p2.y) / 2;
   const [nx, ny] = vecNormalize(...normal2D(p2.x - p0.x, p2.y - p0.y));
-  return { cx: mx + nx * bump, cy: my + ny * bump };
+  return { x: mx + nx * bump, y: my + ny * bump };
 }
-function svgPoint(svgEl, clientX, clientY) {
+
+function svgPoint(svgEl: SVGSVGElement, clientX: number, clientY: number): Point {
   const pt = svgEl.createSVGPoint();
   pt.x = clientX;
   pt.y = clientY;
   const mat = svgEl.getScreenCTM()?.inverse();
-  return mat ? pt.matrixTransform(mat) : { x: clientX, y: clientY };
+  if (!mat) {
+    return { x: clientX, y: clientY };
+  }
+  const { x, y } = pt.matrixTransform(mat);
+  return { x, y };
 }
-function qPoint(p0, p1, p2, t) {
+
+function qPoint(p0: Point, p1: Point, p2: Point, t: number): Point {
   const u = 1 - t;
   return { x: u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x, y: u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y };
 }
-function controlFromT(p0, p2, t, M) {
+
+function controlFromT(p0: Point, p2: Point, t: number, M: Point): Point {
   const u = 1 - t;
   const denom = 2 * u * t;
   if (denom < 1e-6) {
-    return { cx: 2 * M.x - 0.5 * p0.x - 0.5 * p2.x, cy: 2 * M.y - 0.5 * p0.y - 0.5 * p2.y };
+    return { x: 2 * M.x - 0.5 * p0.x - 0.5 * p2.x, y: 2 * M.y - 0.5 * p0.y - 0.5 * p2.y };
   }
   return {
-    cx: (M.x - u * u * p0.x - t * t * p2.x) / denom,
-    cy: (M.y - u * u * p0.y - t * t * p2.y) / denom,
+    x: (M.x - u * u * p0.x - t * t * p2.x) / denom,
+    y: (M.y - u * u * p0.y - t * t * p2.y) / denom,
   };
 }
 
 // ----------------------------------------
 // Icons & palette
 // ----------------------------------------
-const CallLLMIcon = ({ className = "w-4 h-4" }) => (
+const CallLLMIcon = ({ className = "w-4 h-4" }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 5h11a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-3.2L10 18.5V14H7a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" />
     <path d="M15 8h.01M12 8h.01M9 8h.01" />
   </svg>
 );
 
-const ToolCallIcon = ({ className = "w-4 h-4" }) => (
+const ToolCallIcon = ({ className = "w-4 h-4" }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 14.5a3.5 3.5 0 0 1-5-3.2L9.8 5.9a3.5 3.5 0 0 1-4.7 4.7l1.8 1.8L5 14.3l4.7 4.7 1.8-1.9 1.8 1.8a3.5 3.5 0 0 1 4.7-4.7z" />
   </svg>
 );
 
-const TaskIcon = ({ className = "w-4 h-4" }) => (
+const TaskIcon = ({ className = "w-4 h-4" }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 5h10M9 9h10M9 13h10M5 5h.01M5 9h.01M5 13h.01" />
   </svg>
 );
 
-const VerificationIcon = ({ className = "w-4 h-4" }) => (
+const VerificationIcon = ({ className = "w-4 h-4" }: IconProps) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3 5 6v6c0 4 2.6 7.4 7 9 4.4-1.6 7-5 7-9V6l-7-3z" />
     <path d="m9.5 12 1.8 1.8 3.2-3.3" />
   </svg>
 );
 
-const paletteTemplates = [
+const paletteTemplates: Array<PaletteTemplate> = [
   { id: "call-llm", label: "Call LLM", icon: CallLLMIcon },
   { id: "tool-call", label: "Tool call", icon: ToolCallIcon },
   { id: "task", label: "Task", icon: TaskIcon },
   { id: "verification", label: "Verification", icon: VerificationIcon },
 ];
 
-const PaletteButton = ({ template, active, onSelect }) => {
+type PaletteButtonProps = {
+  template: PaletteTemplate;
+  active: boolean;
+  onSelect: (templateId: string) => void;
+};
+
+const PaletteButton = ({ template, active, onSelect }: PaletteButtonProps) => {
   const Icon = template.icon;
   return (
     <button
@@ -126,7 +193,15 @@ const PaletteButton = ({ template, active, onSelect }) => {
   );
 };
 
-const ModeButton = ({ name, value, hotkey, current, onSelect }) => (
+type ModeButtonProps = {
+  name: string;
+  value: Mode;
+  hotkey?: string;
+  current: Mode;
+  onSelect: (mode: Mode) => void;
+};
+
+const ModeButton = ({ name, value, hotkey, current, onSelect }: ModeButtonProps) => (
   <button
     type="button"
     onClick={() => onSelect(value)}
@@ -143,42 +218,42 @@ const ModeButton = ({ name, value, hotkey, current, onSelect }) => (
 );
 
 export default function CanvasPage() {
-  const svgRef = useRef(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   // View (pan/zoom)
-  const [view, setView] = useState({ scale: 1, panX: 0, panY: 0 });
-  const viewRef = useRef(view);
+  const [view, setView] = useState<ViewState>({ scale: 1, panX: 0, panY: 0 });
+  const viewRef = useRef<ViewState>(view);
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
 
-  const [mode, setMode] = useState("select"); // 'select' | 'add-node' | 'connect'
-  const [pendingTemplateId, setPendingTemplateId] = useState(null);
-  const [nodes, setNodes] = useState([
+  const [mode, setMode] = useState<Mode>("select");
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
+  const [nodes, setNodes] = useState<Array<NodeData>>([
     { id: START_NODE_ID, x: 140, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Start" },
     { id: FINISH_NODE_ID, x: 480, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Finish" },
   ]);
-  const [edges, setEdges] = useState([]);
+  const [edges, setEdges] = useState<Array<EdgeData>>([]);
 
   // Selection & hover
-  const [selection, setSelection] = useState({ type: null, id: null }); // 'node' | 'edge' | null
-  const [hover, setHover] = useState({ type: null, id: null }); // 'node' | 'edge' | null
-  const [connectSourceId, setConnectSourceId] = useState(null);
-  const [connectPreview, setConnectPreview] = useState(null);
-  const [nodePreview, setNodePreview] = useState(null);
+  const [selection, setSelection] = useState<Selection>({ type: null, id: null });
+  const [hover, setHover] = useState<HoverState>({ type: null, id: null });
+  const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
+  const [connectPreview, setConnectPreview] = useState<Point | null>(null);
+  const [nodePreview, setNodePreview] = useState<Point | null>(null);
   const [isPointerInsideCanvas, setIsPointerInsideCanvas] = useState(false);
-  const [editingLabelId, setEditingLabelId] = useState(null);
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [editingLabelValue, setEditingLabelValue] = useState("");
 
   // Drag state: 'node' | 'ctrl' | 'pan'
-  const dragRef = useRef({ type: null, id: null, dx: 0, dy: 0, t: 0.5 });
+  const dragRef = useRef<DragState>({ type: null, id: null, dx: 0, dy: 0, t: 0.5 });
   const [spacePressed, setSpacePressed] = useState(false);
 
   // rAF batching for panning
-  const panDeltaRef = useRef({ dx: 0, dy: 0 });
-  const panRafRef = useRef(0);
-  const lastPointerWorldRef = useRef(null);
-  const editingInputRef = useRef(null);
+  const panDeltaRef = useRef<PanDelta>({ dx: 0, dy: 0 });
+  const panRafRef = useRef<number>(0);
+  const lastPointerWorldRef = useRef<Point | null>(null);
+  const editingInputRef = useRef<HTMLInputElement | null>(null);
 
   const commitLabelEdit = useCallback(
     (commit = true) => {
@@ -193,15 +268,17 @@ export default function CanvasPage() {
         return null;
       });
     },
-    [editingLabelValue, setNodes, setEditingLabelValue]
+    [editingLabelValue, setNodes]
   );
 
-  const currentTemplate = useMemo(
-    () => paletteTemplates.find((tpl) => tpl.id === pendingTemplateId) || null,
-    [pendingTemplateId]
-  );
+  const currentTemplate = useMemo<PaletteTemplate | null>(() => {
+    if (!pendingTemplateId) {
+      return null;
+    }
+    return paletteTemplates.find((tpl) => tpl.id === pendingTemplateId) ?? null;
+  }, [pendingTemplateId]);
 
-  const clampPanToWorld = (panX, panY, scale) => {
+  const clampPanToWorld = useCallback((panX: number, panY: number, scale: number): { panX: number; panY: number } => {
     const svg = svgRef.current;
     if (!svg) return { panX, panY };
     const { width: w, height: h } = svg.getBoundingClientRect();
@@ -227,9 +304,9 @@ export default function CanvasPage() {
       y = clamp(panY, minPanY, maxPanY);
     }
     return { panX: x, panY: y };
-  };
+  }, []);
 
-  const schedulePanFrame = () => {
+  const schedulePanFrame = useCallback(() => {
     if (panRafRef.current) return;
     panRafRef.current = requestAnimationFrame(() => {
       const { dx, dy } = panDeltaRef.current;
@@ -245,12 +322,12 @@ export default function CanvasPage() {
         });
       }
     });
-  };
+  }, [clampPanToWorld]);
 
   // Keyboard shortcuts
   useEffect(() => {
-    const onKeyDown = (e) => {
-      const editingActive = editingLabelId && editingInputRef.current === document.activeElement;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const editingActive = Boolean(editingLabelId) && editingInputRef.current === document.activeElement;
       if (editingActive && e.key !== "Escape") {
         return;
       }
@@ -259,18 +336,20 @@ export default function CanvasPage() {
         setSpacePressed(true);
       }
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selection.type === "node" && selection.id) {
-          setNodes((prev) => prev.filter((n) => n.id !== selection.id));
-          setEdges((prev) => prev.filter((ed) => ed.sourceId !== selection.id && ed.targetId !== selection.id));
+        if (selection.type === "node") {
+          const { id } = selection;
+          setNodes((prev) => prev.filter((n) => n.id !== id));
+          setEdges((prev) => prev.filter((ed) => ed.sourceId !== id && ed.targetId !== id));
           setSelection({ type: null, id: null });
-        } else if (selection.type === "edge" && selection.id) {
-          setEdges((prev) => prev.filter((ed) => ed.id !== selection.id));
+        } else if (selection.type === "edge") {
+          const { id } = selection;
+          setEdges((prev) => prev.filter((ed) => ed.id !== id));
           setSelection({ type: null, id: null });
         }
       }
       if (e.key.toLowerCase() === "c") {
         setPendingTemplateId(null);
-        setMode(m => m === "connect" ? "select" : "connect");
+        setMode((currentMode) => (currentMode === "connect" ? "select" : "connect"));
       }
       if (e.key === "Escape") {
         if ((mode === "add-node" && currentTemplate) || mode === "connect") {
@@ -283,7 +362,7 @@ export default function CanvasPage() {
         }
       }
     };
-    const onKeyUp = (e) => {
+    const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") {
         e.preventDefault();
         setSpacePressed(false);
@@ -297,9 +376,9 @@ export default function CanvasPage() {
     };
   }, [selection, mode, currentTemplate, editingLabelId, commitLabelEdit]);
 
-  const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  const nodeMap = useMemo(() => new Map<string, NodeData>(nodes.map((n) => [n.id, n])), [nodes]);
   const resolveConnection = useCallback(
-    (firstId, secondId) => {
+    (firstId: string | null, secondId: string | null): NodeConnection | null => {
       if (!firstId || !secondId || firstId === secondId) return null;
       const first = nodeMap.get(firstId);
       const second = nodeMap.get(secondId);
@@ -335,7 +414,7 @@ export default function CanvasPage() {
     [nodeMap]
   );
 
-  const computeNodePreviewPosition = useCallback((point) => {
+  const computeNodePreviewPosition = useCallback((point: Point): Point => {
     const halfWidth = NODE_WIDTH / 2;
     const halfHeight = NODE_HEIGHT / 2;
     const x = clamp(point.x - halfWidth, WORLD.minX, WORLD.maxX - NODE_WIDTH);
@@ -344,7 +423,7 @@ export default function CanvasPage() {
   }, []);
 
   const startEditingLabel = useCallback(
-    (nodeId) => {
+    (nodeId: string) => {
       const node = nodeMap.get(nodeId);
       if (!node) return;
       const label = (node.label || "").trim();
@@ -356,7 +435,7 @@ export default function CanvasPage() {
       setEditingLabelValue(label);
       setSelection({ type: "node", id: nodeId });
     },
-    [nodeMap, setSelection, setEditingLabelValue]
+    [nodeMap]
   );
 
   useEffect(() => {
@@ -391,25 +470,25 @@ export default function CanvasPage() {
     }
   }, [editingLabelId]);
 
-  function getSvgPointInWorld(clientX, clientY) {
+  function getSvgPointInWorld(clientX: number, clientY: number): Point {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
     return svgPoint(svg, clientX, clientY);
   }
-  function getWorldPoint(clientX, clientY) {
+  function getWorldPoint(clientX: number, clientY: number): Point {
     const p = getSvgPointInWorld(clientX, clientY);
     const v = viewRef.current;
     return { x: (p.x - v.panX) / v.scale, y: (p.y - v.panY) / v.scale };
   }
 
   useEffect(() => {
-    const onMove = (e) => {
+    const onMove = (e: PointerEvent) => {
       const drag = dragRef.current;
-      if (!drag.type) return;
+      if (drag.type === null) return;
 
       if (drag.type === "pan") {
-        const mx = e.movementX ?? 0;
-        const my = e.movementY ?? 0;
+        const mx = e.movementX;
+        const my = e.movementY;
         panDeltaRef.current.dx += mx;
         panDeltaRef.current.dy += my;
         schedulePanFrame();
@@ -418,18 +497,16 @@ export default function CanvasPage() {
       }
 
       const pw = getWorldPoint(e.clientX, e.clientY);
-      if (drag.type === "node" && drag.id) {
+      if (drag.type === "node") {
         setNodes((prev) =>
           prev.map((n) => {
             if (n.id !== drag.id) return n;
-            let x = snap(pw.x - drag.dx);
-            let y = snap(pw.y - drag.dy);
-            x = clamp(x, WORLD.minX, WORLD.maxX - n.width);
-            y = clamp(y, WORLD.minY, WORLD.maxY - n.height);
+            const x = clamp(snap(pw.x - drag.dx), WORLD.minX, WORLD.maxX - n.width);
+            const y = clamp(snap(pw.y - drag.dy), WORLD.minY, WORLD.maxY - n.height);
             return { ...n, x, y };
           })
         );
-      } else if (drag.type === "ctrl" && drag.id) {
+      } else {
         setEdges((prev) =>
           prev.map((ed) => {
             if (ed.id !== drag.id) return ed;
@@ -438,18 +515,18 @@ export default function CanvasPage() {
             if (!s || !t) return ed;
             const p0 = fixedOutputAnchor(s);
             const p2 = fixedInputAnchor(t);
-            const snapped = {
+            const snapped: Point = {
               x: clamp(snap(pw.x), WORLD.minX, WORLD.maxX),
               y: clamp(snap(pw.y), WORLD.minY, WORLD.maxY),
             };
             const cp = controlFromT(p0, p2, drag.t, snapped);
-            return { ...ed, cx: cp.cx, cy: cp.cy };
+            return { ...ed, cx: cp.x, cy: cp.y };
           })
         );
       }
       e.preventDefault();
     };
-    const onUp = (e) => {
+    const onUp = (e: PointerEvent) => {
       const svg = svgRef.current;
       if (svg && dragRef.current.type === "pan") {
         try {
@@ -464,9 +541,9 @@ export default function CanvasPage() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [nodeMap]);
+  }, [nodeMap, schedulePanFrame]);
 
-  const onWheel = (e) => {
+  const onWheel = (e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault();
     const svg = svgRef.current;
     if (!svg) return;
@@ -501,7 +578,7 @@ export default function CanvasPage() {
     setConnectPreview(null);
     setNodePreview(null);
   };
-  const activateTemplate = (templateId) => {
+  const activateTemplate = (templateId: string) => {
     if (mode === "add-node" && pendingTemplateId === templateId) {
       activateSelectMode();
       return;
@@ -511,7 +588,7 @@ export default function CanvasPage() {
     setPendingTemplateId(templateId);
   };
 
-  const onSVGPointerDown = (e) => {
+  const onSVGPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
     if (!svg) return;
     if (spacePressed) {
@@ -522,7 +599,7 @@ export default function CanvasPage() {
       e.preventDefault();
     }
   };
-  const onSVGPointerEnter = (e) => {
+  const onSVGPointerEnter = (e: React.PointerEvent<SVGSVGElement>) => {
     setIsPointerInsideCanvas(true);
     const pw = getWorldPoint(e.clientX, e.clientY);
     lastPointerWorldRef.current = pw;
@@ -533,7 +610,7 @@ export default function CanvasPage() {
       setNodePreview(computeNodePreviewPosition(pw));
     }
   };
-  const onSVGPointerMove = (e) => {
+  const onSVGPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const pw = getWorldPoint(e.clientX, e.clientY);
     lastPointerWorldRef.current = pw;
 
@@ -550,7 +627,7 @@ export default function CanvasPage() {
       setNodePreview(computeNodePreviewPosition(pw));
     }
   };
-  const onSVGPointerUp = (e) => {
+  const onSVGPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
     if (!svg) return;
     if (dragRef.current.type === "pan") {
@@ -569,7 +646,7 @@ export default function CanvasPage() {
     setNodePreview(null);
   };
 
-  const onSVGClick = (e) => {
+  const onSVGClick = (e: React.PointerEvent<SVGSVGElement>) => {
     if (spacePressed) return;
     const pw = getWorldPoint(e.clientX, e.clientY);
     if (mode === "add-node" && currentTemplate) {
@@ -590,7 +667,7 @@ export default function CanvasPage() {
     setConnectSourceId(null);
   };
 
-  const onNodePointerDown = (e, id) => {
+  const onNodePointerDown = (e: React.PointerEvent<SVGGElement>, id: string) => {
     if (spacePressed) return;
     e.stopPropagation();
     if (editingLabelId) {
@@ -602,7 +679,7 @@ export default function CanvasPage() {
     dragRef.current = { type: "node", id, dx: pw.x - node.x, dy: pw.y - node.y, t: 0.5 };
     setSelection({ type: "node", id });
   };
-  const onNodeClick = (e, id) => {
+  const onNodeClick = (e: React.MouseEvent<SVGGElement>, id: string) => {
     if (spacePressed) return;
     e.stopPropagation();
     if (mode === "connect") {
@@ -612,40 +689,28 @@ export default function CanvasPage() {
         const pw = getWorldPoint(e.clientX, e.clientY);
         setConnectPreview(pw);
         return;
-      } else if (connectSourceId && connectSourceId !== id) {
+      }
+      if (connectSourceId && connectSourceId !== id) {
         const connection = resolveConnection(connectSourceId, id);
         if (connection) {
           const { source, target } = connection;
-          let createdEdgeId = null;
-          setEdges((prev) => {
-            const duplicate = prev.some(
-              (ed) =>
-                (ed.sourceId === source.id && ed.targetId === target.id) || (ed.sourceId === target.id && ed.targetId === source.id)
-            );
-            if (duplicate) {
-              return prev;
-            }
-            const a = fixedOutputAnchor(source);
-            const b = fixedInputAnchor(target);
-            const cp = defaultControlPoint(a, b, 60);
-            const edgeId = uid();
-            createdEdgeId = edgeId;
-            return prev.concat({ id: edgeId, sourceId: source.id, targetId: target.id, cx: cp.cx, cy: cp.cy });
-          });
-          if (createdEdgeId) {
-            setSelection({ type: "edge", id: createdEdgeId });
-          } else {
-            const existing = edges.find(
-              (ed) =>
-                (ed.sourceId === source.id && ed.targetId === target.id) || (ed.sourceId === target.id && ed.targetId === source.id)
-            );
-            if (existing) {
-              setSelection({ type: "edge", id: existing.id });
-            }
-            setConnectSourceId(null);
-            setConnectPreview(null);
+          const existing = edges.find(
+            (ed) =>
+              (ed.sourceId === source.id && ed.targetId === target.id) || (ed.sourceId === target.id && ed.targetId === source.id)
+          );
+          if (existing) {
+            setSelection({ type: "edge", id: existing.id });
+            activateSelectMode();
+            return;
           }
+          const a = fixedOutputAnchor(source);
+          const b = fixedInputAnchor(target);
+          const cp = defaultControlPoint(a, b, 60);
+          const edgeId = uid();
+          setEdges((prev) => prev.concat({ id: edgeId, sourceId: source.id, targetId: target.id, cx: cp.x, cy: cp.y }));
+          setSelection({ type: "edge", id: edgeId });
           activateSelectMode();
+          return;
         } else {
           setConnectSourceId(null);
           setConnectPreview(null);
@@ -657,48 +722,48 @@ export default function CanvasPage() {
     }
   };
 
-  const onEdgeClick = (e, id) => {
+  const onEdgeClick = (e: React.MouseEvent<SVGPathElement>, id: string) => {
     if (spacePressed) return;
     e.stopPropagation();
     setSelection({ type: "edge", id });
   };
-  const onEdgeEnter = (e, id) => {
+  const onEdgeEnter = (id: string) => {
     setHover({ type: "edge", id });
   };
   const onEdgeLeave = () => {
     setHover({ type: null, id: null });
   };
-  const onNodeEnter = (id) => {
+  const onNodeEnter = (id: string) => {
     setHover({ type: "node", id });
   };
   const onNodeLeave = () => {
     setHover({ type: null, id: null });
   };
 
-  const onEdgeHandlePointerDown = (e, edgeId, tFixed) => {
+  const onEdgeHandlePointerDown = (e: React.PointerEvent<SVGGElement>, edgeId: string, tFixed: number) => {
     if (spacePressed) return;
     e.stopPropagation();
     dragRef.current = { type: "ctrl", id: edgeId, dx: 0, dy: 0, t: tFixed };
     setSelection({ type: "edge", id: edgeId });
   };
 
-  const nodeMapRender = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
-  const connectPreviewPath = useMemo(() => {
+  const nodeMapRender = useMemo(() => new Map<string, NodeData>(nodes.map((n) => [n.id, n])), [nodes]);
+  const connectPreviewPath = useMemo<PathData | null>(() => {
     if (mode !== "connect" || !connectSourceId || !connectPreview) return null;
     const source = nodeMapRender.get(connectSourceId);
     if (!source) return null;
     const start = fixedOutputAnchor(source);
     const cp = defaultControlPoint(start, connectPreview, 60);
-    const d = `M ${start.x} ${start.y} Q ${cp.cx} ${cp.cy} ${connectPreview.x} ${connectPreview.y}`;
+    const d = `M ${start.x} ${start.y} Q ${cp.x} ${cp.y} ${connectPreview.x} ${connectPreview.y}`;
     return { d };
   }, [mode, connectSourceId, connectPreview, nodeMapRender]);
-  function edgeGeometry(edge) {
+  function edgeGeometry(edge: EdgeData): EdgeGeometry | null {
     const s = nodeMapRender.get(edge.sourceId);
     const t = nodeMapRender.get(edge.targetId);
     if (!s || !t) return null;
     const p0 = fixedOutputAnchor(s);
     const p2 = fixedInputAnchor(t);
-    const c = { x: edge.cx, y: edge.cy };
+    const c: Point = { x: edge.cx, y: edge.cy };
     const d = `M ${p0.x} ${p0.y} Q ${c.x} ${c.y} ${p2.x} ${p2.y}`;
     const tMid = 0.5;
     const mid = qPoint(p0, c, p2, tMid);
@@ -706,7 +771,7 @@ export default function CanvasPage() {
   }
 
   const edgesWithGeometry = useMemo(() => {
-    const acc: Array<{ edge: any; geometry: NonNullable<ReturnType<typeof edgeGeometry>>; gradientId: string }> = [];
+    const acc: Array<EdgeWithGeometry> = [];
     edges.forEach((edge) => {
       const geometry = edgeGeometry(edge);
       if (!geometry) return;
@@ -808,7 +873,7 @@ export default function CanvasPage() {
                     fill="none"
                     style={{ pointerEvents: "stroke", cursor: !isSelected ? (isHovered ? "pointer" : "default") : "default" }}
                     onClick={(e) => onEdgeClick(e, edge.id)}
-                    onPointerEnter={(e) => onEdgeEnter(e, edge.id)}
+                    onPointerEnter={() => onEdgeEnter(edge.id)}
                     onPointerLeave={onEdgeLeave}
                   />
                   <path
@@ -926,12 +991,12 @@ export default function CanvasPage() {
               const isSelected = selection.type === "node" && selection.id === n.id;
               const isHovered = hover.type === "node" && hover.id === n.id;
               const stroke = isSelected ? selectedBlue : isHovered ? lightBlue : baseStroke;
-              const labelId = (n.id ?? "").trim();
+              const labelId = n.id.trim();
               const labelLower = labelId.toLowerCase();
               const isPredefinedNode = labelLower === START_NODE_ID || labelLower === FINISH_NODE_ID;
               const canEditLabel = Boolean(labelId) && !isPredefinedNode;
               const isEditingLabel = canEditLabel && editingLabelId === n.id;
-              const displayLabel = n.label || "Untitled";
+              const displayLabel = n.label;
               const desiredCursor = mode === "connect" ? "crosshair" : !isSelected && isHovered ? "pointer" : "grab";
               const inputAnchor = fixedInputAnchor(n);
               const outputAnchor = fixedOutputAnchor(n);
