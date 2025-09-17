@@ -13,12 +13,13 @@ import reportWebVitals from './reportWebVitals.ts'
 
 import App from './App.tsx'
 import CanvasPage from './components/CanvasPage.tsx'
+import { FormProvider } from '@/context/FormContext.tsx'
 
 const rootRoute = createRootRoute({
   component: () => (
-    <>
+    <FormProvider>
       <Outlet />
-    </>
+    </FormProvider>
   ),
 })
 
