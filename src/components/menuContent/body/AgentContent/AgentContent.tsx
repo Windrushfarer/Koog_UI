@@ -55,7 +55,7 @@ export default function AgentContent() {
               aria-checked={isActive}
               onClick={() => {
                 if (option.id === 'custom') {
-                  if (state.agent.mode == "default") {
+                  if (state.agent.mode == 'default') {
                     dispatch({
                       type: 'SET_AGENT_CUSTOM_STATE',
                       payload: createDefaultCanvasState(),

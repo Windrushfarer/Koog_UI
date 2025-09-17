@@ -1,5 +1,9 @@
 import { createContext, useContext, useEffect, useReducer } from 'react'
 import type { ReactNode } from 'react'
+import {
+  PROVIDERS,
+  PROVIDER_LLMS,
+} from '@/components/menuContent/body/SetupContent/SetupContent.consts.ts'
 
 type TriggerType =
   | 'youtrack'
@@ -106,7 +110,7 @@ type FormState = {
   }
   setup: {
     selectedProviderId: string
-    selectedVersionId: string
+    selectedLLMId: string
     systemPrompt: string
   }
   output: {
@@ -268,8 +272,8 @@ const initialState: FormState = {
     value: '',
   },
   setup: {
-    selectedProviderId: '',
-    selectedVersionId: '',
+    selectedProviderId: PROVIDERS[0].id,
+    selectedLLMId: PROVIDER_LLMS[PROVIDERS[0].id][0].id,
     systemPrompt: '',
   },
   output: {
@@ -371,8 +375,7 @@ export function FormProvider({ children }: { children: ReactNode }) {
 
   const isSetupValid = () => {
     return (
-      state.setup.selectedProviderId !== '' &&
-      state.setup.selectedVersionId !== ''
+      state.setup.selectedProviderId !== '' && state.setup.selectedLLMId !== ''
     )
   }
 

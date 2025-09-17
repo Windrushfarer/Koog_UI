@@ -1,14 +1,14 @@
 import { useEffect } from 'react'
-import { PROVIDERS, PROVIDER_VERSIONS } from './SetupContent.consts'
+import { PROVIDERS, PROVIDER_LLMS } from './SetupContent.consts'
 import Tools from './Tools'
 import type { Provider } from './SetupContent.consts'
 import { useForm } from '@/context/FormContext.tsx'
 
 export default function SetupContent() {
   const { state, dispatch } = useForm()
-  const { selectedProviderId, selectedVersionId, systemPrompt } = state.setup
+  const { selectedProviderId, selectedLLMId, systemPrompt } = state.setup
   const providers: Array<Provider> = PROVIDERS
-  const providerVersions = PROVIDER_VERSIONS
+  const providerVersions = PROVIDER_LLMS
   const selectedProviderVersions = selectedProviderId
     ? (providerVersions[selectedProviderId] ?? [])
     : []
@@ -84,7 +84,7 @@ export default function SetupContent() {
           <select
             id="modelVersion"
             className="block w-full rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            value={selectedVersionId}
+            value={selectedLLMId}
             onChange={(e) => {
               dispatch({
                 type: 'SET_SETUP',
@@ -102,7 +102,7 @@ export default function SetupContent() {
             ))}
           </select>
           <p className="mt-2 text-sm text-neutral-400">
-            Selected: {selectedProviderId} / {selectedVersionId}
+            Selected: {selectedProviderId} / {selectedLLMId}
           </p>
         </div>
 

@@ -22,10 +22,7 @@ export const PROVIDERS: Array<Provider> = [
   { id: 'mistral', name: 'Mistral', url: 'https://console.mistral.ai/' },
 ]
 
-export const PROVIDER_VERSIONS: Record<
-  Provider['id'],
-  Array<ProviderVersion>
-> = {
+export const PROVIDER_LLMS: Record<Provider['id'], Array<ProviderVersion>> = {
   openai: [
     { id: 'gpt-4o', name: 'gpt-4o' },
     { id: 'gpt-4o-mini', name: 'gpt-4o-mini' },

@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { nanoid } from 'nanoid'
 import {
   PROVIDERS,
-  PROVIDER_VERSIONS,
+  PROVIDER_LLMS,
 } from './menuContent/body/SetupContent/SetupContent.consts'
 import TriggerSlackForm from './menuContent/body/TriggerPointContent/TriggerSlackForm'
 import type { ProviderVersion } from './menuContent/body/SetupContent/SetupContent.consts'
@@ -300,6 +300,32 @@ function isSnapshotEqualToDefault(
   defaultSnapshotJson: string,
 ) {
   return JSON.stringify(snapshot) === defaultSnapshotJson
+}
+
+function getNodeMetaLines(node: NodeData): Array<string> | null {
+  switch (node.kind) {
+    case 'ask-llm':
+    case 'llm-judge': {
+      const config = node.config as AskLlmConfig
+      const model = config.modelId.trim() || 'Not set'
+      const prompt = config.prompt.trim()
+      const promptPreview = prompt.trim() || 'Not set'
+      return [`LLM: ${model}`, `Prompt: ${promptPreview}`]
+    }
+    case 'task': {
+      const config = node.config as TaskConfig
+      const task = config.task.trim()
+      const preview = task.trim() || 'Not set'
+      return [`Task: ${preview}`]
+    }
+    case 'ask-user': {
+      const config = node.config as AskUserConfig
+      const channel = config.slackChannel.trim() || 'Not set'
+      return ['Slack', `Channel: ${channel}`]
+    }
+    default:
+      return null
+  }
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
@@ -605,21 +631,19 @@ export default function CanvasPage() {
       return PROVIDERS[0]?.id ?? ''
     })()
     const versions: Array<ProviderVersion> = providerId
-      ? (PROVIDER_VERSIONS[providerId] ?? [])
+      ? (PROVIDER_LLMS[providerId] ?? [])
       : []
     const modelId = (() => {
       if (
-        formState.setup.selectedVersionId &&
-        versions.some(
-          (version) => version.id === formState.setup.selectedVersionId,
-        )
+        formState.setup.selectedLLMId &&
+        versions.some((version) => version.id === formState.setup.selectedLLMId)
       ) {
-        return formState.setup.selectedVersionId
+        return formState.setup.selectedLLMId
       }
       return versions[0]?.id ?? ''
     })()
     return { providerId, modelId }
-  }, [formState.setup.selectedProviderId, formState.setup.selectedVersionId])
+  }, [formState.setup.selectedProviderId, formState.setup.selectedLLMId])
 
   const createConfigForKind = useCallback(
     (kind: NodeKind, name: string): NodeConfigMap[NodeKind] => {
@@ -627,16 +651,16 @@ export default function CanvasPage() {
         case 'ask-llm':
           return {
             name,
-            providerId: '',
-            modelId: '',
+            providerId: formState.setup.selectedProviderId,
+            modelId: formState.setup.selectedLLMId,
             prompt: 'You are a helpful assistant',
           }
         case 'llm-judge':
           return {
             name,
-            providerId: '',
-            modelId: '',
-            prompt: 'Critique the user\'s response',
+            providerId: formState.setup.selectedProviderId,
+            modelId: formState.setup.selectedLLMId,
+            prompt: "Critique the user's response",
           }
         case 'ask-user':
           return {
@@ -653,7 +677,7 @@ export default function CanvasPage() {
           return { name }
       }
     },
-    [formState.output.slackChannel, providerDefaults],
+    [formState, providerDefaults],
   )
 
   // View (pan/zoom)
@@ -826,7 +850,7 @@ export default function CanvasPage() {
         if (providerId && !PROVIDERS.some((p) => p.id === providerId)) {
           providerId = providerDefaults.providerId
         }
-        const versions = providerId ? (PROVIDER_VERSIONS[providerId] ?? []) : []
+        const versions = providerId ? (PROVIDER_LLMS[providerId] ?? []) : []
         let modelId = cfg.modelId
         if (!modelId || !versions.some((version) => version.id === modelId)) {
           modelId = providerDefaults.modelId || versions[0]?.id || ''
@@ -1878,7 +1902,7 @@ export default function CanvasPage() {
     if (configDialog.kind === 'ask-llm' || configDialog.kind === 'llm-judge') {
       const draft = configDraft as AskLlmConfig
       const handleProviderChange = (providerId: string) => {
-        const versions = PROVIDER_VERSIONS[providerId] ?? []
+        const versions = PROVIDER_LLMS[providerId] ?? []
         const nextModelId = versions.some(
           (version) => version.id === draft.modelId,
         )
@@ -1897,7 +1921,7 @@ export default function CanvasPage() {
         setConfigDraft({ ...draft, prompt } as NodeConfigMap[NodeKind])
       }
       const providerVersions = draft.providerId
-        ? (PROVIDER_VERSIONS[draft.providerId] ?? [])
+        ? (PROVIDER_LLMS[draft.providerId] ?? [])
         : []
       configModalContent = (
         <div className="space-y-6">
@@ -2475,6 +2499,14 @@ export default function CanvasPage() {
               const configureButtonX =
                 n.x + n.width / 2 - configureButtonWidth / 2
               const configureButtonY = n.y + n.height + 8
+              const metaLines = getNodeMetaLines(n)
+              const metaWidth = Math.max(120, n.width - 32)
+              const metaHeight = Math.min(
+                n.height - 24,
+                Math.max(48, n.height - 60),
+              )
+              const metaX = n.x + (n.width - metaWidth) / 2
+              const metaY = n.y + (n.height - metaHeight) / 2
               return (
                 <g
                   key={n.id}
@@ -2554,6 +2586,56 @@ export default function CanvasPage() {
                     stroke={stroke}
                     strokeWidth={isSelected ? 2.5 : 1.5}
                   />
+                  {metaLines ? (
+                    <foreignObject
+                      x={metaX}
+                      y={metaY}
+                      width={metaWidth}
+                      height={metaHeight}
+                      style={{ overflow: 'visible', pointerEvents: 'none' }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          height: '100%',
+                          width: '100%',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <div
+                          style={{
+                            border: '1px solid rgba(148, 163, 184, 0.35)',
+                            borderRadius: '6px',
+                            padding: '8px 12px',
+                            margin: '8px',
+                            fontSize: '14px',
+                            lineHeight: '1.35',
+                            color: '#e2e8f0',
+                            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            gap: '4px',
+                            minWidth: 0,
+                          }}
+                        >
+                          {metaLines.map((line, idx) => (
+                            <span
+                              key={`${n.id}-meta-${idx}`}
+                              style={{
+                                overflow: 'hidden',
+                                pointerEvents: 'none',
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {line}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </foreignObject>
+                  ) : null}
                   {isPredefinedNode ? (
                     <text
                       x={n.x + n.width / 2}
@@ -2572,7 +2654,7 @@ export default function CanvasPage() {
                         <circle
                           cx={inputAnchor.x}
                           cy={inputAnchor.y}
-                          r={5.5}
+                          r={7}
                           fill={inputColor}
                           stroke={highlightInput ? selectedBlue : nodeFill}
                           strokeWidth={highlightInput ? 2.2 : 1.5}
@@ -2642,7 +2724,7 @@ export default function CanvasPage() {
                                 textAnchor="end"
                                 dominantBaseline="middle"
                                 fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                                fontSize={11}
+                                fontSize={13}
                                 fontWeight={500}
                                 fill={outputColor}
                                 fillOpacity={isHighlighted ? 0.95 : 0.85}
@@ -2668,7 +2750,7 @@ export default function CanvasPage() {
                           <circle
                             cx={anchor.x}
                             cy={anchor.y}
-                            r={5.5}
+                            r={7}
                             fill={outputColor}
                             stroke={isHighlighted ? selectedBlue : nodeFill}
                             strokeWidth={isHighlighted ? 2.2 : 1.5}
