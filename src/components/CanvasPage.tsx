@@ -31,7 +31,7 @@ const FINISH_NODE_ID = "agent-finish-node";
 
 type Point = { x: number; y: number };
 type PortType = "String" | "ToolCall" | "ToolResult" | "JudgeResult";
-type NodeKind = "start" | "finish" | "ask-llm" | "tool-call" | "task" | "llm-judge";
+type NodeKind = "start" | "finish" | "ask-llm" | "ask-user" | "tool-call" | "task" | "llm-judge";
 type PaletteNodeKind = Exclude<NodeKind, "start" | "finish">;
 
 type NodeData = {
@@ -49,10 +49,11 @@ type EdgeData = {
   id: string;
   sourceId: string;
   sourcePort: number;
-  sourcePortType: PortType | null;
+  sourcePortType: PortType;
   targetId: string;
   cx: number;
   cy: number;
+  fieldName: string | null;
 };
 type ViewState = { scale: number; panX: number; panY: number };
 type Mode = "select" | "add-node" | "connect";
@@ -70,13 +71,9 @@ type NodeConnection = { source: NodeData; target: NodeData };
 type PaletteTemplate = {
   id: PaletteNodeKind;
   label: string;
-  icon: (props: IconProps) => ReactElement;
+  icon: () => string;
   inputType: PortType | null;
   outputTypes: Array<PortType>;
-};
-
-type IconProps = {
-  className?: string;
 };
 
 type EdgeGeometry = {
@@ -106,6 +103,15 @@ type ConnectSourceState = {
   port: number;
 };
 
+type PendingFieldSelection = {
+  sourceId: string;
+  sourcePort: number;
+  sourcePortType: PortType;
+  targetId: string;
+  targetInputType: PortType | null;
+  options: Array<FieldSpec>;
+};
+
 type GraphNodeSnapshot = {
   id: string;
   kind: NodeKind;
@@ -122,7 +128,8 @@ type GraphEdgeSnapshot = {
   sourcePort: number;
   targetId: string;
   control: Point;
-  sourcePortType: PortType | null;
+  sourcePortType: PortType;
+  fieldName: string | null;
 };
 
 type GraphSnapshot = {
@@ -265,34 +272,18 @@ function controlFromT(p0: Point, p2: Point, t: number, M: Point): Point {
 // ----------------------------------------
 // Icons & palette
 // ----------------------------------------
-const CallLLMIcon = ({ className = "w-4 h-4" }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 5h11a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-3.2L10 18.5V14H7a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" />
-    <path d="M15 8h.01M12 8h.01M9 8h.01" />
-  </svg>
-);
+const CallLLMIcon = () => '🤖'
+const AskUserIcon = () => '💬'
 
-const ToolCallIcon = ({ className = "w-4 h-4" }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 14.5a3.5 3.5 0 0 1-5-3.2L9.8 5.9a3.5 3.5 0 0 1-4.7 4.7l1.8 1.8L5 14.3l4.7 4.7 1.8-1.9 1.8 1.8a3.5 3.5 0 0 1 4.7-4.7z" />
-  </svg>
-);
+const ToolCallIcon = () => "⚙️";
 
-const TaskIcon = ({ className = "w-4 h-4" }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 5h10M9 9h10M9 13h10M5 5h.01M5 9h.01M5 13h.01" />
-  </svg>
-);
+const TaskIcon = () => "📝";
 
-const VerificationIcon = ({ className = "w-4 h-4" }: IconProps) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3 5 6v6c0 4 2.6 7.4 7 9 4.4-1.6 7-5 7-9V6l-7-3z" />
-    <path d="m9.5 12 1.8 1.8 3.2-3.3" />
-  </svg>
-);
+const VerificationIcon = () => "🛡️";
 
 const paletteTemplates: Array<PaletteTemplate> = [
   { id: "ask-llm", label: "Ask LLM", icon: CallLLMIcon, inputType: "String", outputTypes: ["String", "ToolCall"] },
+  { id: "ask-user", label: "Ask User", icon: AskUserIcon, inputType: "String", outputTypes: ["String"] },
   { id: "tool-call", label: "Tool call", icon: ToolCallIcon, inputType: "ToolCall", outputTypes: ["ToolResult"] },
   { id: "task", label: "Task", icon: TaskIcon, inputType: "String", outputTypes: ["String"] },
   { id: "llm-judge", label: "LLM Judge", icon: VerificationIcon, inputType: "String", outputTypes: ["JudgeResult", "JudgeResult"] },
@@ -302,9 +293,28 @@ const nodeOutputDescriptions: Record<NodeKind, Array<string>> = {
   start: [],
   finish: [],
   "ask-llm": ["onAssistantMessage", "onToolCall"],
-  "tool-call": ["ToolResult.output"],
-  task: ["TaskResult.result"],
+  "ask-user": [],
+  "tool-call": [],
+  task: [],
   "llm-judge": ["successful == true", "successful == false"],
+};
+
+type FieldSpec = { name: string; type: PortType };
+
+const typeFields: Record<PortType, Array<FieldSpec>> = {
+  String: [],
+  ToolCall: [
+    { name: "tool", type: "String" },
+    { name: "content", type: "String" },
+  ],
+  ToolResult: [
+    { name: "tool", type: "String" },
+    { name: "content", type: "String" },
+  ],
+  JudgeResult: [
+    { name: "feedback", type: "String" },
+    { name: "input", type: "String" },
+  ],
 };
 
 type PaletteButtonProps = {
@@ -321,14 +331,14 @@ const PaletteButton = ({ template, active, onSelect }: PaletteButtonProps) => {
       onClick={() => onSelect(template.id)}
       className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition shadow-sm ${
         active
-          ? "bg-sky-900/30 border-sky-500 text-sky-200"
-          : "bg-neutral-800 border-neutral-700 hover:border-neutral-500 text-neutral-200"
+          ? 'bg-sky-900/30 border-sky-500 text-sky-200'
+          : 'bg-neutral-800 border-neutral-700 hover:border-neutral-500 text-neutral-200'
       }`}
     >
-      <Icon className={active ? "w-4 h-4 text-sky-300" : "w-4 h-4 text-neutral-400"} />
+      {<Icon />}
       <span>{template.label}</span>
     </button>
-  );
+  )
 };
 
 type ModeButtonProps = {
@@ -410,6 +420,8 @@ export default function CanvasPage() {
   const [isPointerInsideCanvas, setIsPointerInsideCanvas] = useState(false);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [editingLabelValue, setEditingLabelValue] = useState("");
+  const [fieldSelection, setFieldSelection] = useState<PendingFieldSelection | null>(null);
+  const [fieldOptionHover, setFieldOptionHover] = useState<string | null>(null);
 
   // Drag state: 'node' | 'ctrl' | 'pan'
   const dragRef = useRef<DragState>({ type: null, id: null, dx: 0, dy: 0, t: 0.5 });
@@ -497,6 +509,8 @@ export default function CanvasPage() {
     setConnectSource(null);
     setConnectPreview(null);
     setNodePreview(null);
+    setFieldSelection(null);
+    setFieldOptionHover(null);
   }, []);
   const activateConnectMode = useCallback(() => {
     if (mode === "connect") {
@@ -508,6 +522,8 @@ export default function CanvasPage() {
     setConnectSource(null);
     setConnectPreview(null);
     setNodePreview(null);
+    setFieldSelection(null);
+    setFieldOptionHover(null);
   }, [mode, activateSelectMode]);
 
   // Keyboard shortcuts
@@ -539,6 +555,13 @@ export default function CanvasPage() {
         activateConnectMode();
       }
       if (e.key === "Escape") {
+        if (fieldSelection) {
+          e.preventDefault();
+          setFieldSelection(null);
+          setConnectSource(null);
+          setConnectPreview(null);
+          return;
+        }
         if ((mode === "add-node" && currentTemplate) || mode === "connect") {
           e.preventDefault();
           activateSelectMode();
@@ -561,7 +584,7 @@ export default function CanvasPage() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [selection, mode, currentTemplate, editingLabelId, commitLabelEdit, activateConnectMode, activateSelectMode]);
+  }, [selection, mode, currentTemplate, editingLabelId, commitLabelEdit, activateConnectMode, activateSelectMode, fieldSelection]);
 
   const nodeMap = useMemo(() => new Map<string, NodeData>(nodes.map((n) => [n.id, n])), [nodes]);
   const resolveConnection = useCallback(
@@ -632,6 +655,12 @@ export default function CanvasPage() {
       setConnectPreview(null);
     }
   }, [connectSource]);
+
+  useEffect(() => {
+    if (!fieldSelection) {
+      setFieldOptionHover(null);
+    }
+  }, [fieldSelection]);
 
   useEffect(() => {
     if (mode !== "connect") {
@@ -762,6 +791,10 @@ export default function CanvasPage() {
   };
 
   const onSVGPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (fieldSelection) {
+      e.preventDefault();
+      return;
+    }
     const svg = svgRef.current;
     if (!svg) return;
     if (spacePressed) {
@@ -773,6 +806,7 @@ export default function CanvasPage() {
     }
   };
   const onSVGPointerEnter = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (fieldSelection) return;
     setIsPointerInsideCanvas(true);
     const pw = getWorldPoint(e.clientX, e.clientY);
     lastPointerWorldRef.current = pw;
@@ -785,6 +819,7 @@ export default function CanvasPage() {
     }
   };
   const onSVGPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (fieldSelection) return;
     const pw = getWorldPoint(e.clientX, e.clientY);
     lastPointerWorldRef.current = pw;
 
@@ -815,6 +850,7 @@ export default function CanvasPage() {
   };
 
   const onSVGPointerLeave = () => {
+    if (fieldSelection) return;
     setIsPointerInsideCanvas(false);
     lastPointerWorldRef.current = null;
     if (mode === "connect") {
@@ -825,6 +861,7 @@ export default function CanvasPage() {
   };
 
   const onSVGClick = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (fieldSelection) return;
     if (spacePressed) return;
     const pw = getWorldPoint(e.clientX, e.clientY);
     if (mode === "add-node" && currentTemplate) {
@@ -857,6 +894,7 @@ export default function CanvasPage() {
   };
 
   const onNodePointerDown = (e: React.PointerEvent<SVGGElement>, id: string) => {
+    if (fieldSelection) return;
     if (spacePressed) return;
     e.stopPropagation();
     if (editingLabelId) {
@@ -869,6 +907,7 @@ export default function CanvasPage() {
     setSelection({ type: "node", id });
   };
   const onNodeClick = (e: React.MouseEvent<SVGGElement>, id: string) => {
+    if (fieldSelection) return;
     if (spacePressed) return;
     e.stopPropagation();
 
@@ -922,21 +961,35 @@ export default function CanvasPage() {
         }
 
         const targetInputType = target.inputType;
-        if (targetInputType && source.outputTypes[sourcePort] !== targetInputType) {
-          return;
-        }
+        const sourcePortType = source.outputTypes[sourcePort];
 
         if (sourcePort < 0 || sourcePort >= source.outputTypes.length) {
           return;
         }
 
-        const sourcePortType = source.outputTypes[sourcePort] ?? null;
         const duplicateEdge = edges.find(
           (ed) => ed.sourceId === source.id && ed.sourcePort === sourcePort && ed.targetId === target.id
         );
         if (duplicateEdge) {
           setSelection({ type: "edge", id: duplicateEdge.id });
           activateSelectMode();
+          return;
+        }
+
+        if (targetInputType && sourcePortType !== targetInputType) {
+          const available = typeFields[sourcePortType].filter((field) => field.type === targetInputType);
+          if (!available.length) {
+            return;
+          }
+          setFieldSelection({
+            sourceId: source.id,
+            sourcePort,
+            sourcePortType,
+            targetId: target.id,
+            targetInputType,
+            options: available,
+          });
+          setConnectPreview(fixedInputAnchor(target));
           return;
         }
 
@@ -953,6 +1006,7 @@ export default function CanvasPage() {
             targetId: target.id,
             cx: cp.x,
             cy: cp.y,
+            fieldName: null,
           })
         );
         setSelection({ type: "edge", id: edgeId });
@@ -967,6 +1021,53 @@ export default function CanvasPage() {
 
     setSelection({ type: "node", id });
   };
+
+  const fulfillFieldSelection = useCallback(
+    (field: FieldSpec) => {
+      if (!fieldSelection) {
+        return;
+      }
+      const { sourceId, sourcePort, sourcePortType, targetId, targetInputType } = fieldSelection;
+      const source = nodeMap.get(sourceId);
+      const target = nodeMap.get(targetId);
+      if (!source || !target) {
+        setFieldSelection(null);
+        setFieldOptionHover(null);
+        return;
+      }
+      if (targetInputType && field.type !== targetInputType) {
+        return;
+      }
+      const clampedPort = clamp(sourcePort, 0, Math.max(0, source.outputTypes.length - 1));
+      const duplicateEdge = edges.find(
+        (ed) => ed.sourceId === source.id && ed.sourcePort === clampedPort && ed.targetId === target.id
+      );
+      if (duplicateEdge) {
+        setSelection({ type: "edge", id: duplicateEdge.id });
+        activateSelectMode();
+        return;
+      }
+      const a = fixedOutputAnchor(source, clampedPort);
+      const b = fixedInputAnchor(target);
+      const cp = defaultControlPoint(a, b, 60);
+      const edgeId = uid();
+      setEdges((prev) =>
+        prev.concat({
+          id: edgeId,
+          sourceId: source.id,
+          sourcePort: clampedPort,
+          sourcePortType,
+          targetId: target.id,
+          cx: cp.x,
+          cy: cp.y,
+          fieldName: field.name,
+        })
+      );
+      setSelection({ type: "edge", id: edgeId });
+      activateSelectMode();
+    },
+    [activateSelectMode, edges, fieldSelection, nodeMap]
+  );
 
   const onEdgeClick = (e: React.MouseEvent<SVGPathElement>, id: string) => {
     if (spacePressed) return;
@@ -1045,19 +1146,15 @@ export default function CanvasPage() {
       inputType: node.inputType,
       outputTypes: [...node.outputTypes],
     }));
-    const nodeLookup = new Map(nodes.map((node) => [node.id, node] as const));
-    const edgeSnapshots: Array<GraphEdgeSnapshot> = edges.map((edge) => {
-      const sourceNode = nodeLookup.get(edge.sourceId);
-      const fallbackType = sourceNode?.outputTypes[edge.sourcePort] ?? null;
-      return {
-        id: edge.id,
-        sourceId: edge.sourceId,
-        sourcePort: edge.sourcePort,
-        targetId: edge.targetId,
-        control: { x: edge.cx, y: edge.cy },
-        sourcePortType: edge.sourcePortType ?? fallbackType,
-      };
-    });
+    const edgeSnapshots: Array<GraphEdgeSnapshot> = edges.map((edge) => ({
+      id: edge.id,
+      sourceId: edge.sourceId,
+      sourcePort: edge.sourcePort,
+      targetId: edge.targetId,
+      control: { x: edge.cx, y: edge.cy },
+      sourcePortType: edge.sourcePortType,
+      fieldName: edge.fieldName,
+    }));
     return { nodes: nodeSnapshots, edges: edgeSnapshots };
   }, [nodes, edges]);
 
@@ -1100,16 +1197,15 @@ export default function CanvasPage() {
             let highlightPort = -1;
             if (sourceNode.outputTypes.length > 0) {
               if (source.id === connectSource.nodeId) {
-                const desired = clamp(connectSource.port, 0, sourceNode.outputTypes.length - 1);
-                if (!targetInputType || sourceNode.outputTypes[desired] === targetInputType) {
-                  highlightPort = desired;
-                }
+                highlightPort = clamp(connectSource.port, 0, sourceNode.outputTypes.length - 1);
               } else {
                 const preferred = closestOutputPort(sourceNode, pointerWorld);
-                if (!targetInputType || sourceNode.outputTypes[preferred] === targetInputType) {
-                  highlightPort = preferred;
-                } else {
-                  highlightPort = closestOutputPortOfType(sourceNode, targetInputType, pointerWorld);
+                highlightPort = preferred;
+                if (targetInputType) {
+                  const compatible = closestOutputPortOfType(sourceNode, targetInputType, pointerWorld);
+                  if (compatible !== -1) {
+                    highlightPort = compatible;
+                  }
                 }
               }
             }
@@ -1120,7 +1216,11 @@ export default function CanvasPage() {
               );
               if (!duplicateEdge) {
                 markOutput(source.id, highlightPort);
-                if (!targetInputType || sourceNode.outputTypes[highlightPort] === targetInputType) {
+                const outputType = sourceNode.outputTypes[highlightPort];
+                const fields = typeFields[outputType];
+                const canTransform =
+                  !targetInputType || outputType === targetInputType || fields.some((field) => field.type === targetInputType);
+                if (canTransform) {
                   markInput(targetNode.id);
                   connectionHighlighted = true;
                 }
@@ -1288,6 +1388,12 @@ export default function CanvasPage() {
               const labelWidth = 44;
               const labelHeight = 16;
               const labelOffset = 20;
+              const fieldLabel = edge.fieldName ? `transformed { ${edge.fieldName} }` : null;
+              const fieldLabelWidth = fieldLabel ? Math.max(100, fieldLabel.length * 6.1 + 24) : 0;
+              const fieldLabelHeight = 18;
+              const fieldLabelOffset = 28;
+              const fieldAnchorX = fieldLabel ? g.mid.x : 0;
+              const fieldAnchorY = fieldLabel ? g.mid.y - fieldLabelOffset : 0;
               return (
                 <g key={edge.id}>
                   <path
@@ -1319,6 +1425,38 @@ export default function CanvasPage() {
                       style={{ pointerEvents: "none" }}
                     />
                   )}
+                  {fieldLabel ? (
+                    <g transform={`translate(${fieldAnchorX} ${fieldAnchorY})`} style={{ pointerEvents: "none" }}>
+                      <rect
+                        x={-fieldLabelWidth / 2}
+                        y={-fieldLabelHeight / 2}
+                        width={fieldLabelWidth}
+                        height={fieldLabelHeight}
+                        rx={6}
+                        ry={6}
+                        fill="#0f172a"
+                        fillOpacity={0.85}
+                        stroke={isSelected ? selectedBlue : nodeFill}
+                        strokeWidth={isSelected ? 1 : 0.8}
+                      />
+                      <text
+                        x={0}
+                        y={0}
+                        dominantBaseline="middle"
+                        textAnchor="middle"
+                        fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                        fontSize={9}
+                        fill={isSelected ? selectedBlue : "#cbd5f5"}
+                        fillOpacity={isSelected ? 0.95 : 0.8}
+                      >
+                        <tspan fill={inputColor}>transformed</tspan>
+                        <tspan> </tspan>
+                        <tspan fill={inputColor}>{'{'} </tspan>
+                        <tspan>{`${edge.fieldName}`}</tspan>
+                        <tspan fill={inputColor}> {'}'}</tspan>
+                      </text>
+                    </g>
+                  ) : null}
                   <path
                     d={g.arrowPath}
                     fill={gradientStroke}
@@ -1442,6 +1580,19 @@ export default function CanvasPage() {
               const highlightedOutputs = connectorHighlight?.outputs;
               const outputPoints = outputAnchors(n);
               const outputDescriptions = nodeOutputDescriptions[n.kind];
+              const showFieldDropdown = Boolean(fieldSelection && fieldSelection.targetId === n.id);
+              const dropdownOptions = showFieldDropdown ? fieldSelection!.options : [];
+              const dropdownWidth = 176;
+              const optionHeight = 20;
+              const optionGap = 4;
+              const paddingX = 12;
+              const paddingY = 8;
+              const dropdownContentHeight = dropdownOptions.length
+                ? dropdownOptions.length * optionHeight + (dropdownOptions.length - 1) * optionGap
+                : 0;
+              const dropdownHeight = dropdownContentHeight + paddingY * 2;
+              const dropdownX = inputAnchor.x - dropdownWidth - 18;
+              const dropdownY = inputAnchor.y - dropdownHeight / 2;
               return (
                 <g
                   key={n.id}
@@ -1568,11 +1719,11 @@ export default function CanvasPage() {
                         ) : null}
                       </>
                     )}
-                    {outputPoints.map((anchor, index) => {
-                      const isHighlighted = Boolean(highlightedOutputs?.has(index));
-                      const typeLabel = n.outputTypes[index];
-                      const outputLabel = outputDescriptions[index];
-                      const arrowColor = isHighlighted ? selectedBlue : outputColor;
+                  {outputPoints.map((anchor, index) => {
+                    const isHighlighted = Boolean(highlightedOutputs?.has(index));
+                    const typeLabel = n.outputTypes[index];
+                    const outputLabel = outputDescriptions[index];
+                    const arrowColor = isHighlighted ? selectedBlue : outputColor;
                       const textColor = isHighlighted ? selectedBlue : nodeText;
                       const arrowTipX = anchor.x - 4;
                       const arrowHeadBaseX = arrowTipX - 5;
@@ -1659,6 +1810,79 @@ export default function CanvasPage() {
                       );
                     })}
                   </g>
+                  {showFieldDropdown && dropdownOptions.length ? (
+                    <g
+                      transform={`translate(${dropdownX} ${dropdownY})`}
+                      style={{ pointerEvents: "auto" }}
+                      onPointerDown={(evt) => evt.stopPropagation()}
+                      onPointerUp={(evt) => evt.stopPropagation()}
+                    >
+                      <rect
+                        x={0}
+                        y={0}
+                        width={dropdownWidth}
+                        height={dropdownHeight}
+                        rx={12}
+                        ry={12}
+                        fill="#0f172a"
+                        fillOpacity={0.92}
+                        stroke={selectedBlue}
+                        strokeWidth={1}
+                      />
+                      {dropdownOptions.map((option, index) => {
+                        const optionY = paddingY + index * (optionHeight + optionGap);
+                        const optionHovered = fieldOptionHover === option.name;
+                        return (
+                          <g
+                            key={option.name}
+                            transform={`translate(0 ${optionY})`}
+                            onPointerEnter={() => setFieldOptionHover(option.name)}
+                            onPointerLeave={() => {
+                              setFieldOptionHover((current) => (current === option.name ? null : current));
+                            }}
+                            onPointerDown={(evt) => {
+                              evt.stopPropagation();
+                              evt.preventDefault();
+                              fulfillFieldSelection(option);
+                            }}
+                            style={{ cursor: "pointer" }}
+                          >
+                            <rect
+                              x={paddingX - 6}
+                              y={-2}
+                              width={dropdownWidth - (paddingX - 6) * 2}
+                              height={optionHeight + 4}
+                              rx={6}
+                              ry={6}
+                              fill={optionHovered ? "#172133" : "transparent"}
+                              stroke={optionHovered ? selectedBlue : "transparent"}
+                              strokeWidth={optionHovered ? 0.8 : 0}
+                            />
+                            <text
+                              x={paddingX}
+                              y={optionHeight / 2 + 4}
+                              textAnchor="start"
+                              fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                              fontSize={11}
+                              fill="#e2e8f0"
+                            >
+                              {`${option.name}: ${option.type}`}
+                            </text>
+                            {index < dropdownOptions.length - 1 ? (
+                              <line
+                                x1={1}
+                                x2={dropdownWidth - 1}
+                                y1={optionHeight + optionGap / 2 + 1}
+                                y2={optionHeight + optionGap / 2 + 1}
+                                stroke="#344a70"
+                                strokeWidth={1}
+                              />
+                            ) : null}
+                          </g>
+                        );
+                      })}
+                    </g>
+                  ) : null}
                 </g>
               );
             })}
