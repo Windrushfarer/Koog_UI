@@ -13,10 +13,18 @@
     "check": "prettier --write . && eslint --fix"
   },
   "dependencies": {
+    "@codemirror/language": "^6.11.3",
+    "@codemirror/legacy-modes": "^6.5.1",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/stream-parser": "^0.19.9",
+    "@codemirror/view": "^6.38.2",
     "@tailwindcss/vite": "^4.0.6",
     "@tanstack/react-devtools": "^0.2.2",
     "@tanstack/react-router": "^1.130.2",
     "@tanstack/react-router-devtools": "^1.131.5",
+    "@uiw/codemirror-theme-darcula": "^4.25.1",
+    "@uiw/codemirror-themes": "^4.25.1",
+    "codemirror": "^6.0.2",
     "nanoid": "^5.1.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

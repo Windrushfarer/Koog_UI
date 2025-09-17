@@ -6,6 +6,7 @@ import {
   PROVIDER_LLMS,
 } from './menuContent/body/SetupContent/SetupContent.consts'
 import TriggerSlackForm from './menuContent/body/TriggerPointContent/TriggerSlackForm'
+import CodeViewModal from './CodeViewModal'
 import type { ProviderVersion } from './menuContent/body/SetupContent/SetupContent.consts'
 import type {
   CanvasGraphSnapshot,
@@ -723,6 +724,8 @@ export default function CanvasPage() {
   const [fieldSelection, setFieldSelection] =
     useState<PendingFieldSelection | null>(null)
   const [fieldOptionHover, setFieldOptionHover] = useState<string | null>(null)
+  const [isCodeModalOpen, setIsCodeModalOpen] = useState(false)
+  const [codeContent, setCodeContent] = useState('')
 
   // Drag state: 'node' | 'ctrl' | 'pan'
   const dragRef = useRef<DragState>({
@@ -1729,6 +1732,41 @@ export default function CanvasPage() {
     })
   }, [edges, navigate, nodes, persistCanvasState])
 
+  const handleViewCode = useCallback(() => {
+    const exampleCode = `fun agentStrategy() = strategy<String, String>("Trip planning") {
+    val proposeGatheringPlan by subgraphWithTask<String, String>(
+        toolSelectionStrategy = ToolSelectionStrategy.ALL
+    ) { input ->
+        """
+        Task: Create the plan for the trip
+        Additional feedback: $input
+        """.trimIndent()
+    }
+
+    val criticPlan by llmAsAJudge(
+        llmModel = OpenAIModels.GPT_4_1,
+        task = "You must evaluate the travel plan and decide if it's good or not.\\nLook at the LAST tool call that contains the full plan, and analyze if it needs any adjustments."
+    )
+
+    val askUser by askUserInSlack(channelId = "koog-next-bot")
+
+    val analyzeSentiment by llmAsAJudge(
+        llmModel = OpenAIModels.GPT_4_1,
+        task = "You must understand the sentiment of user. Look at the LAST message from the user, and analyze if the user wants to refine the plan or is the user happy with it."
+    )
+
+    edge(nodeStart forwardTo proposeGatheringPlan)
+    edge(proposeGatheringPlan forwardTo criticPlan)
+    edge(criticPlan forwardTo askUser onCondition { it.successful } transformed { it.input })
+    edge(criticPlan forwardTo proposeGatheringPlan onCondition { !it.successful } transformed { it.feedback })
+    edge(askUser forwardTo analyzeSentiment)
+    edge(analyzeSentiment forwardTo nodeFinish onCondition { it.successful } transformed { it.input })
+    edge(analyzeSentiment forwardTo proposeGatheringPlan onCondition { !it.successful } transformed { it.feedback })
+}`
+    setCodeContent(exampleCode)
+    setIsCodeModalOpen(true)
+  }, [])
+
   const connectorHighlights = useMemo(() => {
     const highlights = new Map<string, ConnectorHighlight>()
     if (mode !== 'connect') {
@@ -2172,6 +2210,14 @@ export default function CanvasPage() {
 
         <div className="absolute top-6 right-6 z-30">
           <div className="flex items-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900/90 px-3 py-2 shadow-lg backdrop-blur">
+            <button
+              type="button"
+              onClick={handleViewCode}
+              className="px-3 py-1.5 rounded-xl border text-xs font-medium transition bg-neutral-800 text-neutral-200 border-neutral-700 hover:border-neutral-500"
+              title="View code"
+            >
+              View code
+            </button>
             <button
               type="button"
               onClick={handleSave}
@@ -2924,6 +2970,12 @@ export default function CanvasPage() {
           {Math.round(scale * 100)}%
         </div>
       </div>
+
+      <CodeViewModal
+        isOpen={isCodeModalOpen}
+        onClose={() => setIsCodeModalOpen(false)}
+        code={codeContent}
+      />
     </div>
   )
 }

@@ -1,0 +1,30 @@
+fun agentStrategy() = strategy<String, String>("Trip planning") {
+    val proposeGatheringPlan by subgraphWithTask<String, String>(
+        toolSelectionStrategy = ToolSelectionStrategy.ALL
+    ) { input ->
+        """
+        Task: Create the plan for the trip
+        Additional feedback: $input
+        """.trimIndent()
+    }
+
+    val criticPlan by llmAsAJudge(
+        llmModel = OpenAIModels.GPT_4_1,
+        task = "You must evaluate the travel plan and decide if it's good or not.\nLook at the LAST tool call that contains the full plan, and analyze if it needs any adjustments."
+    )
+
+    val askUser by askUserInSlack(channelId = "koog-next-bot")
+
+    val analyzeSentiment by llmAsAJudge(
+        llmModel = OpenAIModels.GPT_4_1,
+        task = "You must understand the sentiment of user. Look at the LAST message from the user, and analyze if the user wants to refine the plan or is the user happy with it."
+    )
+
+    edge(nodeStart forwardTo proposeGatheringPlan)
+    edge(proposeGatheringPlan forwardTo criticPlan)
+    edge(criticPlan forwardTo askUser onCondition { it.successful } transformed { it.input })
+    edge(criticPlan forwardTo proposeGatheringPlan onCondition { !it.successful } transformed { it.feedback })
+    edge(askUser forwardTo analyzeSentiment)
+    edge(analyzeSentiment forwardTo nodeFinish onCondition { it.successful } transformed { it.input })
+    edge(analyzeSentiment forwardTo proposeGatheringPlan onCondition { !it.successful } transformed { it.feedback })
+}
