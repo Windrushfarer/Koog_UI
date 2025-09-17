@@ -18,10 +18,6 @@ export default function NavigationManager() {
 
   const activeId = search.tab || 'trigger'
 
-  // Log navigation and validation state for debugging
-  // eslint-disable-next-line no-console
-  console.log('[Navigation] activeId:', activeId)
-
   const goToNextStep = () => {
     const currentIndex = defaultNavigation.findIndex(
       (item) => item.id === activeId,
@@ -31,7 +27,10 @@ export default function NavigationManager() {
       canProceedToNext(activeId)
     ) {
       const nextId = defaultNavigation[currentIndex + 1].id
-      void navigate({ to: '/', search: { tab: nextId, agentStrategy: search.agentStrategy } })
+      void navigate({
+        to: '/',
+        search: { tab: nextId },
+      })
     }
   }
 

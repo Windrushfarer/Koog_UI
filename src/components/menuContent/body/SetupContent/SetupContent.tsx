@@ -118,10 +118,17 @@ export default function SetupContent() {
             placeholder=""
             className="block w-full min-h-[120px] rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-y"
             value={systemPrompt}
-            onChange={(e) => dispatch({ type: 'SET_SYSTEM_PROMPT', payload: { systemPrompt: e.target.value } })}
+            onChange={(e) =>
+              dispatch({
+                type: 'SET_SYSTEM_PROMPT',
+                payload: { systemPrompt: e.target.value },
+              })
+            }
           />
           <p className="mt-2 text-sm text-neutral-400">
-            {systemPrompt ? `${systemPrompt.length} characters` : 'Describe the task for the agent.'}
+            {systemPrompt
+              ? `${systemPrompt.length} characters`
+              : 'Describe the task for the agent.'}
           </p>
         </div>
       </div>

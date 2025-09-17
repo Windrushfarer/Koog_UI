@@ -6,7 +6,12 @@ import {
 } from './menuContent/body/SetupContent/SetupContent.consts'
 import TriggerSlackForm from './menuContent/body/TriggerPointContent/TriggerSlackForm'
 import type { ProviderVersion } from './menuContent/body/SetupContent/SetupContent.consts'
-import { useForm } from '@/context/FormContext.tsx'
+import type {
+  CanvasGraphSnapshot,
+  CanvasState,
+  CanvasViewState,
+} from '@/context/FormContext.tsx'
+import { createDefaultCanvasState, useForm } from '@/context/FormContext.tsx'
 
 // Mini Graph Canvas v8 — smooth grab-mode pan + wheel zoom + snap-to-grid + zoom % + full-bleed grid + drag constraints
 // Tweaks: floating palette, connect auto-select, palette-driven add mode, simplified shortcuts.
@@ -26,8 +31,6 @@ const BG_EXTENT = 100000 // big world rect for full-bleed grid
 const WORLD = { minX: -3000, minY: -3000, maxX: 3000, maxY: 3000 }
 const NODE_WIDTH = 220
 const NODE_HEIGHT = 112
-const START_NODE_ID = 'agent-start-node'
-const FINISH_NODE_ID = 'agent-finish-node'
 const TOOL_OPTIONS = ['Web Search', 'Weather', 'Map']
 
 type Point = { x: number; y: number }
@@ -183,6 +186,123 @@ type GraphEdgeSnapshot = {
 type GraphSnapshot = {
   nodes: Array<GraphNodeSnapshot>
   edges: Array<GraphEdgeSnapshot>
+}
+
+type PersistedNode = CanvasGraphSnapshot['nodes'][number]
+
+function cloneConfigFromPersistedNode(
+  node: PersistedNode,
+): NodeConfigMap[NodeKind] {
+  switch (node.kind) {
+    case 'task': {
+      const config = node.config as TaskConfig
+      return { ...config, tools: [...config.tools] }
+    }
+    case 'ask-llm':
+    case 'llm-judge': {
+      const config = node.config as NodeConfigMap['ask-llm']
+      return { ...config }
+    }
+    case 'ask-user': {
+      const config = node.config as NodeConfigMap['ask-user']
+      return { ...config }
+    }
+    default: {
+      const config = node.config as NodeConfigMap['start']
+      return { ...config }
+    }
+  }
+}
+
+function hydrateNodesFromPersistedSnapshot(
+  snapshot: CanvasGraphSnapshot,
+): Array<NodeData> {
+  return snapshot.nodes.map((node) => ({
+    id: node.id,
+    kind: node.kind as NodeKind,
+    x: node.position.x,
+    y: node.position.y,
+    width: node.size.width,
+    height: node.size.height,
+    label: node.label,
+    inputType: node.inputType as PortType | null,
+    outputTypes: [...node.outputTypes] as Array<PortType>,
+    config: cloneConfigFromPersistedNode(node),
+  }))
+}
+
+function hydrateEdgesFromPersistedSnapshot(
+  snapshot: CanvasGraphSnapshot,
+): Array<EdgeData> {
+  return snapshot.edges.map((edge) => ({
+    id: edge.id,
+    sourceId: edge.sourceId,
+    sourcePort: edge.sourcePort,
+    targetId: edge.targetId,
+    cx: edge.control.x,
+    cy: edge.control.y,
+    sourcePortType: edge.sourcePortType as PortType,
+    fieldName: edge.fieldName,
+  }))
+}
+
+function cloneConfigFromGraphNode(
+  node: GraphNodeSnapshot,
+): NodeConfigMap[NodeKind] {
+  switch (node.kind) {
+    case 'task':
+      return {
+        ...(node.config as TaskConfig),
+        tools: [...(node.config as TaskConfig).tools],
+      }
+    default:
+      return { ...node.config }
+  }
+}
+
+function toPersistedGraphSnapshot(
+  snapshot: GraphSnapshot,
+): CanvasGraphSnapshot {
+  return {
+    nodes: snapshot.nodes.map((node) => ({
+      id: node.id,
+      kind: node.kind,
+      label: node.label,
+      position: { ...node.position },
+      size: { ...node.size },
+      inputType: node.inputType,
+      outputTypes: [...node.outputTypes],
+      config: cloneConfigFromGraphNode(node),
+    })),
+    edges: snapshot.edges.map((edge) => ({
+      id: edge.id,
+      sourceId: edge.sourceId,
+      sourcePort: edge.sourcePort,
+      targetId: edge.targetId,
+      control: { ...edge.control },
+      sourcePortType: edge.sourcePortType,
+      fieldName: edge.fieldName,
+    })),
+  }
+}
+
+function hydrateViewStateFromPersisted(view: CanvasViewState): ViewState {
+  return { scale: view.scale, panX: view.panX, panY: view.panY }
+}
+
+function toPersistedViewState(view: ViewState): CanvasViewState {
+  return { scale: view.scale, panX: view.panX, panY: view.panY }
+}
+
+function isViewEqual(a: CanvasViewState, b: CanvasViewState) {
+  return a.scale === b.scale && a.panX === b.panX && a.panY === b.panY
+}
+
+function isSnapshotEqualToDefault(
+  snapshot: CanvasGraphSnapshot,
+  defaultSnapshotJson: string,
+) {
+  return JSON.stringify(snapshot) === defaultSnapshotJson
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
@@ -467,7 +587,18 @@ export default function CanvasPage() {
   const navigate = useNavigate()
   const svgRef = useRef<SVGSVGElement | null>(null)
 
-  const { state: formState } = useForm()
+  const { state: formState, dispatch } = useForm()
+  const agentState = formState.agent
+  const defaultCanvasState = useMemo<CanvasState>(
+    () => createDefaultCanvasState(),
+    [],
+  )
+  const defaultSnapshotSignature = useMemo(
+    () => JSON.stringify(defaultCanvasState.snapshot),
+    [defaultCanvasState],
+  )
+  const initialCanvasState =
+    agentState.mode === 'custom' ? agentState.state : defaultCanvasState
 
   const providerDefaults = useMemo(() => {
     const providerId = (() => {
@@ -523,7 +654,9 @@ export default function CanvasPage() {
   )
 
   // View (pan/zoom)
-  const [view, setView] = useState<ViewState>({ scale: 1, panX: 0, panY: 0 })
+  const [view, setView] = useState<ViewState>(() =>
+    hydrateViewStateFromPersisted(initialCanvasState.view),
+  )
   const viewRef = useRef<ViewState>(view)
   useEffect(() => {
     viewRef.current = view
@@ -532,33 +665,12 @@ export default function CanvasPage() {
   const [mode, setMode] = useState<Mode>('select')
   const [pendingTemplateId, setPendingTemplateId] =
     useState<PaletteNodeKind | null>(null)
-  const [nodes, setNodes] = useState<Array<NodeData>>([
-    {
-      id: START_NODE_ID,
-      kind: 'start',
-      x: 140,
-      y: 240,
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT,
-      label: 'Start',
-      inputType: null,
-      outputTypes: ['String'],
-      config: { name: 'Start' },
-    },
-    {
-      id: FINISH_NODE_ID,
-      kind: 'finish',
-      x: 480,
-      y: 240,
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT,
-      label: 'Finish',
-      inputType: 'String',
-      outputTypes: [],
-      config: { name: 'Finish' },
-    },
-  ])
-  const [edges, setEdges] = useState<Array<EdgeData>>([])
+  const [nodes, setNodes] = useState<Array<NodeData>>(() =>
+    hydrateNodesFromPersistedSnapshot(initialCanvasState.snapshot),
+  )
+  const [edges, setEdges] = useState<Array<EdgeData>>(() =>
+    hydrateEdgesFromPersistedSnapshot(initialCanvasState.snapshot),
+  )
   const [configDialog, setConfigDialog] = useState<{
     nodeId: string
     kind: NodeKind
@@ -566,16 +678,6 @@ export default function CanvasPage() {
   const [configDraft, setConfigDraft] = useState<
     NodeConfigMap[NodeKind] | null
   >(null)
-
-  const handleSave = useCallback(() => {
-    // Replace with real persistence when ready
-    // For now, just log the current graph state
-    console.log('Canvas saved', { nodes, edges })
-    void navigate({
-      to: '/',
-      search: { tab: 'agent', agentStrategy: 'custom' },
-    })
-  }, [nodes, edges, navigate])
 
   // Selection & hover
   const [selection, setSelection] = useState<Selection>({
@@ -1561,6 +1663,44 @@ export default function CanvasPage() {
   useEffect(() => {
     graphSnapshotRef.current = graphSnapshot
   }, [graphSnapshot])
+
+  const persistCanvasState = useCallback(() => {
+    const persistedSnapshot = toPersistedGraphSnapshot(graphSnapshotRef.current)
+    const persistedView = toPersistedViewState(viewRef.current)
+
+    if (
+      isViewEqual(persistedView, defaultCanvasState.view) &&
+      isSnapshotEqualToDefault(persistedSnapshot, defaultSnapshotSignature)
+    ) {
+      dispatch({ type: 'SET_AGENT_DEFAULT' })
+      return
+    }
+
+    dispatch({
+      type: 'SET_AGENT_CUSTOM_STATE',
+      payload: {
+        snapshot: persistedSnapshot,
+        view: persistedView,
+      },
+    })
+  }, [defaultCanvasState, defaultSnapshotSignature, dispatch])
+
+  useEffect(() => {
+    return () => {
+      persistCanvasState()
+    }
+  }, [persistCanvasState])
+
+  const handleSave = useCallback(() => {
+    persistCanvasState()
+    // Replace with real persistence when ready
+    // For now, just log the current graph state
+    console.log('Canvas saved', { nodes, edges })
+    void navigate({
+      to: '/',
+      search: { tab: 'agent' },
+    })
+  }, [edges, navigate, nodes, persistCanvasState])
 
   const connectorHighlights = useMemo(() => {
     const highlights = new Map<string, ConnectorHighlight>()

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearch } from '@tanstack/react-router'
+import { useMemo } from 'react'
+import { useNavigate } from '@tanstack/react-router'
+import { createDefaultCanvasState, useForm } from '@/context/FormContext.tsx'
 
 type StrategyOption = {
   id: 'default' | 'custom'
@@ -9,15 +10,8 @@ type StrategyOption = {
 }
 
 export default function AgentContent() {
-  const search = useSearch({ from: '/' })
   const navigate = useNavigate()
-  const [selected, setSelected] = useState<'default' | 'custom'>(
-    search.agentStrategy === 'custom' ? 'custom' : 'default',
-  )
-
-  useEffect(() => {
-    setSelected(search.agentStrategy === 'custom' ? 'custom' : 'default')
-  }, [search.agentStrategy])
+  const { dispatch, state } = useForm()
 
   const options = useMemo<Array<StrategyOption>>(
     () => [
@@ -40,7 +34,7 @@ export default function AgentContent() {
   )
 
   return (
-    <section className='h-screen'>
+    <section className="h-screen">
       <h2 className="mb-2 text-xl font-semibold text-neutral-100">Agent</h2>
       <p className="mb-4 text-neutral-300">
         Define agent behavior, tools, and capabilities.
@@ -52,7 +46,7 @@ export default function AgentContent() {
         aria-label="Agent strategy"
       >
         {options.map((option) => {
-          const isActive = selected === option.id
+          const isActive = state.agent.mode === option.id
           return (
             <button
               key={option.id}
@@ -60,17 +54,17 @@ export default function AgentContent() {
               role="radio"
               aria-checked={isActive}
               onClick={() => {
-                setSelected(option.id)
-
                 if (option.id === 'custom') {
+                  if (state.agent.mode == "default") {
+                    dispatch({
+                      type: 'SET_AGENT_CUSTOM_STATE',
+                      payload: createDefaultCanvasState(),
+                    })
+                  }
                   void navigate({ to: '/canvas' })
-                  return
+                } else {
+                  dispatch({ type: 'SET_AGENT_DEFAULT' })
                 }
-
-                void navigate({
-                  to: '/',
-                  search: { tab: 'agent', agentStrategy: undefined },
-                })
               }}
               className={`group w-full rounded-xl border-2 px-5 py-4 text-left transition ${
                 isActive

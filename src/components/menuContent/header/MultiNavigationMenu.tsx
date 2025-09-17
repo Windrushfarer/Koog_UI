@@ -46,7 +46,7 @@ export default function MultiNavigationMenu({
     ((id: string) => {
       void navigate({
         to: '/',
-        search: { tab: id, agentStrategy: search.agentStrategy },
+        search: { tab: id },
       })
     })
 
@@ -70,10 +70,7 @@ export default function MultiNavigationMenu({
   function renderItems(nodes: Array<NavigationItem>, level: number = 0) {
     const isTopLevel = level === 0
     return (
-      <ul
-        className={isTopLevel ? 'flex gap-2' : 'ml-4 mt-2 flex flex-col gap-2'}
-        role={isTopLevel ? 'tablist' : undefined}
-      >
+      <ul className={isTopLevel ? 'flex gap-2' : 'ml-4 mt-2 flex flex-col gap-2'}>
         {nodes.map((node) => {
           const hasChildren = !!node.children?.length
           const isOpen = openMap[node.id]

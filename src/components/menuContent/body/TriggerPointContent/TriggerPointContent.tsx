@@ -39,7 +39,7 @@ export default function TriggerPointContent() {
   }
 
   return (
-    <section className='h-screen'>
+    <section className="h-screen">
       <h2 className="text-xl font-semibold mb-2">Trigger</h2>
       <p className="text-gray-600 mb-4">
         Choose a source to trigger your workflow.

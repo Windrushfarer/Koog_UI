@@ -26,7 +26,7 @@ export default function OutputContent() {
   }, [selected, slackValue, telegramValue, dispatch])
 
   return (
-    <section className='h-screen'>
+    <section className="h-screen">
       <h2 className="text-xl font-semibold mb-2 text-neutral-100">Output</h2>
       <p className="text-neutral-300 mb-4">
         Choose a destination for the agent output.
