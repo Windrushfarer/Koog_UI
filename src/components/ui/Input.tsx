@@ -16,5 +16,3 @@ export default function Input({ className = '', ...props }: InputProps) {
     />
   )
 }
-
-

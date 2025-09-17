@@ -23,15 +23,18 @@ This is a React + TypeScript application built with Vite, using TanStack Router 
 ### Core Application Structure
 
 **Two-Page Application:**
+
 - `/` - Main form page with multi-step wizard (trigger → setup → agent → output)
 - `/canvas` - Visual flow editor using canvas-based interface
 
 **State Management Architecture:**
+
 - `FormContext` (src/context/FormContext.tsx) - Global form state using React Context + useReducer
 - `NavigationContext` (src/context/NavigationContext.tsx) - Navigation state for form progression
 - Both contexts work together to manage form validation and step-by-step navigation
 
 **Form Validation System:**
+
 - Form progression is controlled by validation rules in FormContext
 - Each step must be valid before proceeding to the next
 - FloatingNextButton is disabled when current form step is incomplete
@@ -40,16 +43,19 @@ This is a React + TypeScript application built with Vite, using TanStack Router 
 ### Key Components
 
 **NavigationManager** (src/components/NavigationManager.tsx):
+
 - Central coordinator that manages form progression
 - Integrates with TanStack Router for URL-based tab state
 - Wraps MultiNavigationMenu and FloatingNextButton with NavigationProvider
 
 **MultiNavigationMenu** (src/components/menuContent/header/MultiNavigationMenu.tsx):
+
 - Tab-based navigation with URL query parameter integration (`/?tab=trigger`)
 - Renders different content components based on active tab
 - Enforces navigation constraints based on form validation
 
 **Form Steps:**
+
 - **Trigger**: Select workflow trigger (YouTrack, GitHub, Slack, Google Calendar, Telegram)
 - **Setup**: Choose LLM provider (OpenAI, Anthropic, Google, etc.) and model version
 - **Agent**: Agent configuration (component exists but not fully implemented)
@@ -58,6 +64,7 @@ This is a React + TypeScript application built with Vite, using TanStack Router 
 ### Routing Integration
 
 The application uses TanStack Router with code-based routing defined in `src/main.tsx`:
+
 - Main page supports `tab` query parameter for deep-linking to specific form steps
 - Default tab is `trigger` if no query parameter provided
 - Navigation updates URL automatically when switching tabs
@@ -80,17 +87,20 @@ The application uses TanStack Router with code-based routing defined in `src/mai
 ## Common Development Patterns
 
 **Adding New Form Steps:**
+
 1. Update `defaultNavigation` array in NavigationManager
 2. Add validation logic to `canProceedToNext` in FormContext
 3. Add new content component and import in MultiNavigationMenu
 4. Update form state types and actions in FormContext if needed
 
 **Working with Router:**
+
 - Use `useNavigate()` and `useSearch()` from `@tanstack/react-router`
 - Always use `void navigate()` to satisfy ESLint rules about ignored promises
 - Query parameters are strongly typed through route validation
 
 **Context Usage:**
+
 - `useForm()` for global form state and validation
 - `useNavigation()` for form progression and navigation state
 - Both hooks throw errors if used outside their respective providers

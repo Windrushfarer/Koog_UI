@@ -9,7 +9,9 @@ export default function SetupContent() {
   const { selectedProviderId, selectedVersionId, systemPrompt } = state.setup
   const providers: Array<Provider> = PROVIDERS
   const providerVersions = PROVIDER_VERSIONS
-  const selectedProviderVersions = selectedProviderId ? providerVersions[selectedProviderId] ?? [] : []
+  const selectedProviderVersions = selectedProviderId
+    ? (providerVersions[selectedProviderId] ?? [])
+    : []
 
   useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
@@ -21,8 +23,8 @@ export default function SetupContent() {
           type: 'SET_SETUP',
           payload: {
             selectedProviderId: firstProvider.id,
-            selectedVersionId: firstVersion.id
-          }
+            selectedVersionId: firstVersion.id,
+          },
         })
       }
     }
@@ -54,8 +56,8 @@ export default function SetupContent() {
                       type: 'SET_SETUP',
                       payload: {
                         selectedProviderId: p.id,
-                        selectedVersionId: firstVersion
-                      }
+                        selectedVersionId: firstVersion,
+                      },
                     })
                   }
                 }}
@@ -88,8 +90,8 @@ export default function SetupContent() {
                 type: 'SET_SETUP',
                 payload: {
                   selectedProviderId,
-                  selectedVersionId: e.target.value
-                }
+                  selectedVersionId: e.target.value,
+                },
               })
             }}
           >

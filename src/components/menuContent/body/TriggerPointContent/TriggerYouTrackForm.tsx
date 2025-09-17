@@ -5,15 +5,21 @@ interface TriggerYouTrackFormProps {
   onValueChange: (value: string) => void
 }
 
-export default function TriggerYouTrackForm({ value, onValueChange }: TriggerYouTrackFormProps) {
+export default function TriggerYouTrackForm({
+  value,
+  onValueChange,
+}: TriggerYouTrackFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-     
+
     console.log('YouTrack create trigger', { project: value })
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl p-[1px] bg-gradient-to-r from-[#B191FF]/30 via-transparent to-[#B191FF]/30 shadow-[0_0_24px_#B191FF]/30">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 rounded-2xl p-[1px] bg-gradient-to-r from-[#B191FF]/30 via-transparent to-[#B191FF]/30 shadow-[0_0_24px_#B191FF]/30"
+    >
       <div className="rounded-2xl bg-neutral-900/95 border border-[#B191FF]/30 p-5 backdrop-blur-xl shadow-[0_0_12px_#B191FF]/30 hover:shadow-[0_0_18px_#B191FF]/40 focus-within:shadow-[0_0_24px_#B191FF]/50 transition">
         <Input
           placeholder="Enter filters"
@@ -24,5 +30,3 @@ export default function TriggerYouTrackForm({ value, onValueChange }: TriggerYou
     </form>
   )
 }
-
-

@@ -23,16 +23,25 @@ export default function NavigationManager() {
   console.log('[Navigation] activeId:', activeId)
 
   const goToNextStep = () => {
-    const currentIndex = defaultNavigation.findIndex(item => item.id === activeId)
-    if (currentIndex < defaultNavigation.length - 1 && canProceedToNext(activeId)) {
+    const currentIndex = defaultNavigation.findIndex(
+      (item) => item.id === activeId,
+    )
+    if (
+      currentIndex < defaultNavigation.length - 1 &&
+      canProceedToNext(activeId)
+    ) {
       const nextId = defaultNavigation[currentIndex + 1].id
       void navigate({ to: '/', search: { tab: nextId, agentStrategy: search.agentStrategy } })
     }
   }
 
-  const currentIndex = defaultNavigation.findIndex(item => item.id === activeId)
+  const currentIndex = defaultNavigation.findIndex(
+    (item) => item.id === activeId,
+  )
   const isLastStep = currentIndex === defaultNavigation.length - 1
-  const canGoToNext = isLastStep ? canProceedToNext(activeId) : (currentIndex < defaultNavigation.length - 1 && canProceedToNext(activeId))
+  const canGoToNext = isLastStep
+    ? canProceedToNext(activeId)
+    : currentIndex < defaultNavigation.length - 1 && canProceedToNext(activeId)
 
   return (
     <NavigationProvider

@@ -12,13 +12,20 @@ export type ProviderVersion = {
 export const PROVIDERS: Array<Provider> = [
   { id: 'openai', name: 'OpenAI', url: 'https://platform.openai.com/' },
   { id: 'anthropic', name: 'Anthropic', url: 'https://console.anthropic.com/' },
-  { id: 'google', name: 'Google AI Studio', url: 'https://aistudio.google.com/' },
+  {
+    id: 'google',
+    name: 'Google AI Studio',
+    url: 'https://aistudio.google.com/',
+  },
   { id: 'openrouter', name: 'OpenRouter', url: 'https://openrouter.ai/' },
   { id: 'azure', name: 'Azure OpenAI', url: 'https://portal.azure.com/' },
   { id: 'mistral', name: 'Mistral', url: 'https://console.mistral.ai/' },
 ]
 
-export const PROVIDER_VERSIONS: Record<Provider['id'], Array<ProviderVersion>> = {
+export const PROVIDER_VERSIONS: Record<
+  Provider['id'],
+  Array<ProviderVersion>
+> = {
   openai: [
     { id: 'gpt-4o', name: 'gpt-4o' },
     { id: 'gpt-4o-mini', name: 'gpt-4o-mini' },
@@ -51,5 +58,3 @@ export const PROVIDER_VERSIONS: Record<Provider['id'], Array<ProviderVersion>> =
     { id: 'codestral-22b', name: 'Codestral 22B' },
   ],
 }
-
-

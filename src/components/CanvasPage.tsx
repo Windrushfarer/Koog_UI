@@ -28,11 +28,7 @@ const NODE_WIDTH = 220
 const NODE_HEIGHT = 112
 const START_NODE_ID = 'agent-start-node'
 const FINISH_NODE_ID = 'agent-finish-node'
-const TOOL_OPTIONS = [
-  'Web Search',
-  'Weather',
-  'Map',
-]
+const TOOL_OPTIONS = ['Web Search', 'Weather', 'Map']
 
 type Point = { x: number; y: number }
 type PortType = 'String' | 'ToolCall' | 'ToolResult' | 'JudgeResult'
@@ -2110,7 +2106,7 @@ export default function CanvasPage() {
               const labelHeight = 16
               const labelOffset = 20
               const fieldLabel = edge.fieldName
-                ? `transformed { {${edge.fieldName}} }`
+                ? `transformed { ${edge.fieldName} }`
                 : null
               const fieldLabelWidth = fieldLabel
                 ? Math.max(100, fieldLabel.length * 6.1 + 24)
@@ -2187,9 +2183,7 @@ export default function CanvasPage() {
                         <tspan fill={inputColor}>transformed</tspan>
                         <tspan> </tspan>
                         <tspan fill={inputColor}>{'{'} </tspan>
-                        <tspan fill={inputColor}>{'{'}</tspan>
                         <tspan>{edge.fieldName}</tspan>
-                        <tspan fill={inputColor}>{'}'}</tspan>
                         <tspan fill={inputColor}>{' }'}</tspan>
                       </text>
                     </g>

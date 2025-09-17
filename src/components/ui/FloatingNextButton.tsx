@@ -4,7 +4,9 @@ type FloatingNextButtonProps = {
   onClick?: () => void
 }
 
-export default function FloatingNextButton({ onClick }: FloatingNextButtonProps) {
+export default function FloatingNextButton({
+  onClick,
+}: FloatingNextButtonProps) {
   const { goToNextStep, canGoToNext, currentStep } = useNavigation()
 
   const handleClick = () => {
@@ -29,5 +31,3 @@ export default function FloatingNextButton({ onClick }: FloatingNextButtonProps)
     </button>
   )
 }
-
-

@@ -7,7 +7,9 @@ type NavigationContextType = {
   currentStep: string
 }
 
-const NavigationContext = createContext<NavigationContextType | undefined>(undefined)
+const NavigationContext = createContext<NavigationContextType | undefined>(
+  undefined,
+)
 
 type NavigationProviderProps = {
   children: ReactNode
@@ -16,13 +18,20 @@ type NavigationProviderProps = {
   currentStep: string
 }
 
-export function NavigationProvider({ children, goToNextStep, canGoToNext, currentStep }: NavigationProviderProps) {
+export function NavigationProvider({
+  children,
+  goToNextStep,
+  canGoToNext,
+  currentStep,
+}: NavigationProviderProps) {
   return (
-    <NavigationContext.Provider value={{
-      goToNextStep,
-      canGoToNext,
-      currentStep
-    }}>
+    <NavigationContext.Provider
+      value={{
+        goToNextStep,
+        canGoToNext,
+        currentStep,
+      }}
+    >
       {children}
     </NavigationContext.Provider>
   )

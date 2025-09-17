@@ -1,7 +1,13 @@
 import { createContext, useContext, useReducer, useEffect } from 'react'
-import type { ReactNode } from 'react';
+import type { ReactNode } from 'react'
 
-type TriggerType = 'youtrack' | 'github' | 'slack' | 'google-calendar' | 'telegram' | null
+type TriggerType =
+  | 'youtrack'
+  | 'github'
+  | 'slack'
+  | 'google-calendar'
+  | 'telegram'
+  | null
 
 type Tool = {
   id: string
@@ -47,7 +53,7 @@ const DEFAULT_TOOLS: Array<Tool> = [
 const initialState: FormState = {
   trigger: {
     selectedTrigger: null,
-    value: ''
+    value: '',
   },
   setup: {
     selectedProviderId: '',
@@ -70,7 +76,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
     case 'SET_TRIGGER':
       return {
         ...state,
-        trigger: action.payload
+        trigger: action.payload,
       }
     case 'SET_SETUP':
       return {
@@ -85,7 +91,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
     case 'SET_OUTPUT':
       return {
         ...state,
-        output: action.payload
+        output: action.payload,
       }
     case 'INIT_TOOLS': {
       const available = action.payload.available
@@ -132,14 +138,19 @@ export function FormProvider({ children }: { children: ReactNode }) {
   }, [state])
 
   const isTriggerValid = () => {
-    return state.trigger.selectedTrigger !== null &&
-           (state.trigger.selectedTrigger === 'google-calendar' ||
-            state.trigger.selectedTrigger === 'telegram' ||
-            state.trigger.value.trim() !== '')
+    return (
+      state.trigger.selectedTrigger !== null &&
+      (state.trigger.selectedTrigger === 'google-calendar' ||
+        state.trigger.selectedTrigger === 'telegram' ||
+        state.trigger.value.trim() !== '')
+    )
   }
 
   const isSetupValid = () => {
-    return state.setup.selectedProviderId !== '' && state.setup.selectedVersionId !== ''
+    return (
+      state.setup.selectedProviderId !== '' &&
+      state.setup.selectedVersionId !== ''
+    )
   }
 
   const isOutputValid = () => {
@@ -168,14 +179,16 @@ export function FormProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <FormContext.Provider value={{
-      state,
-      dispatch,
-      isTriggerValid,
-      isSetupValid,
-      isOutputValid,
-      canProceedToNext
-    }}>
+    <FormContext.Provider
+      value={{
+        state,
+        dispatch,
+        isTriggerValid,
+        isSetupValid,
+        isOutputValid,
+        canProceedToNext,
+      }}
+    >
       {children}
     </FormContext.Provider>
   )

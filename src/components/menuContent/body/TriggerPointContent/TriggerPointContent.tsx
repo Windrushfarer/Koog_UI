@@ -5,7 +5,13 @@ import GitHubTrigger from './Triggers/GitHubTrigger'
 import GoogleCalendarTrigger from './Triggers/GoogleCalendarTrigger'
 import TelegramTrigger from './Triggers/TelegramTrigger'
 
-type TriggerType = 'youtrack' | 'github' | 'slack' | 'google-calendar' | 'telegram' | null
+type TriggerType =
+  | 'youtrack'
+  | 'github'
+  | 'slack'
+  | 'google-calendar'
+  | 'telegram'
+  | null
 
 export default function TriggerPointContent() {
   const { state, dispatch } = useForm()
@@ -13,20 +19,31 @@ export default function TriggerPointContent() {
 
   const handleTriggerToggle = (triggerType: TriggerType) => {
     if (activeTrigger === triggerType) {
-      dispatch({ type: 'SET_TRIGGER', payload: { selectedTrigger: null, value: '' } })
+      dispatch({
+        type: 'SET_TRIGGER',
+        payload: { selectedTrigger: null, value: '' },
+      })
     } else {
-      dispatch({ type: 'SET_TRIGGER', payload: { selectedTrigger: triggerType, value: '' } })
+      dispatch({
+        type: 'SET_TRIGGER',
+        payload: { selectedTrigger: triggerType, value: '' },
+      })
     }
   }
 
   const handleValueChange = (value: string) => {
-    dispatch({ type: 'SET_TRIGGER', payload: { selectedTrigger: activeTrigger, value } })
+    dispatch({
+      type: 'SET_TRIGGER',
+      payload: { selectedTrigger: activeTrigger, value },
+    })
   }
 
   return (
     <section className='h-screen'>
       <h2 className="text-xl font-semibold mb-2">Trigger</h2>
-      <p className="text-gray-600 mb-4">Choose a source to trigger your workflow.</p>
+      <p className="text-gray-600 mb-4">
+        Choose a source to trigger your workflow.
+      </p>
 
       <div className="flex flex-col gap-4">
         <YouTrackTrigger
@@ -59,5 +76,3 @@ export default function TriggerPointContent() {
     </section>
   )
 }
-
-
