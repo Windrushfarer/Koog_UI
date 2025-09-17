@@ -8,7 +8,7 @@ interface TriggerYouTrackFormProps {
 export default function TriggerYouTrackForm({ value, onValueChange }: TriggerYouTrackFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    // eslint-disable-next-line no-console
+     
     console.log('YouTrack create trigger', { project: value })
   }
 

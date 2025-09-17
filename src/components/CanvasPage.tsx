@@ -163,10 +163,10 @@ const VerificationIcon = ({ className = "w-4 h-4" }: IconProps) => (
 );
 
 const paletteTemplates: Array<PaletteTemplate> = [
-  { id: "call-llm", label: "Call LLM", icon: CallLLMIcon },
+  { id: "call-llm", label: "Ask LLM", icon: CallLLMIcon },
   { id: "tool-call", label: "Tool call", icon: ToolCallIcon },
   { id: "task", label: "Task", icon: TaskIcon },
-  { id: "verification", label: "Verification", icon: VerificationIcon },
+  { id: "llm-judge", label: "LLM Judge", icon: VerificationIcon },
 ];
 
 type PaletteButtonProps = {

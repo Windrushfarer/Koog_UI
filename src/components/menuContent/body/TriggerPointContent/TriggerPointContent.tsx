@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useForm } from '../../../../context/FormContext'
 import SlackTrigger from './Triggers/SlackTrigger'
 import YouTrackTrigger from './Triggers/YouTrackTrigger'
 import GitHubTrigger from './Triggers/GitHubTrigger'
@@ -8,16 +8,19 @@ import TelegramTrigger from './Triggers/TelegramTrigger'
 type TriggerType = 'youtrack' | 'github' | 'slack' | 'google-calendar' | 'telegram' | null
 
 export default function TriggerPointContent() {
-  const [activeTrigger, setActiveTrigger] = useState<TriggerType>(null)
-  const [triggerValue, setTriggerValue] = useState('')
+  const { state, dispatch } = useForm()
+  const { selectedTrigger: activeTrigger, value: triggerValue } = state.trigger
 
   const handleTriggerToggle = (triggerType: TriggerType) => {
     if (activeTrigger === triggerType) {
-      setActiveTrigger(null)
+      dispatch({ type: 'SET_TRIGGER', payload: { selectedTrigger: null, value: '' } })
     } else {
-      setActiveTrigger(triggerType)
-      setTriggerValue('')
+      dispatch({ type: 'SET_TRIGGER', payload: { selectedTrigger: triggerType, value: '' } })
     }
+  }
+
+  const handleValueChange = (value: string) => {
+    dispatch({ type: 'SET_TRIGGER', payload: { selectedTrigger: activeTrigger, value } })
   }
 
   return (
@@ -30,19 +33,19 @@ export default function TriggerPointContent() {
           isOpen={activeTrigger === 'youtrack'}
           onToggle={() => handleTriggerToggle('youtrack')}
           value={activeTrigger === 'youtrack' ? triggerValue : ''}
-          onValueChange={setTriggerValue}
+          onValueChange={handleValueChange}
         />
         <GitHubTrigger
           isOpen={activeTrigger === 'github'}
           onToggle={() => handleTriggerToggle('github')}
           value={activeTrigger === 'github' ? triggerValue : ''}
-          onValueChange={setTriggerValue}
+          onValueChange={handleValueChange}
         />
         <SlackTrigger
           isOpen={activeTrigger === 'slack'}
           onToggle={() => handleTriggerToggle('slack')}
           value={activeTrigger === 'slack' ? triggerValue : ''}
-          onValueChange={setTriggerValue}
+          onValueChange={handleValueChange}
         />
         <GoogleCalendarTrigger
           isOpen={activeTrigger === 'google-calendar'}

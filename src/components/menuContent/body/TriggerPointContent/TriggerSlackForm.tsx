@@ -8,7 +8,7 @@ interface TriggerSlackFormProps {
 export default function TriggerSlackForm({ value, onValueChange }: TriggerSlackFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    // eslint-disable-next-line no-console
+     
     console.log('Slack create trigger', { filters: value })
   }
 

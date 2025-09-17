@@ -12,6 +12,7 @@ import './styles.css'
 import reportWebVitals from './reportWebVitals.ts'
 
 import App from './App.tsx'
+import CanvasPage from './components/CanvasPage.tsx'
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -24,10 +25,19 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string) || 'trigger'
+  }),
   component: App,
 })
 
-const routeTree = rootRoute.addChildren([indexRoute])
+const canvasRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/canvas',
+  component: CanvasPage,
+})
+
+const routeTree = rootRoute.addChildren([indexRoute, canvasRoute])
 
 const router = createRouter({
   routeTree,
