@@ -12,11 +12,17 @@ type FormState = {
     selectedProviderId: string
     selectedVersionId: string
   }
+  output: {
+    destination: 'slack' | 'telegram' | null
+    slackChannel: string
+    telegramChat: string
+  }
 }
 
 type FormAction =
   | { type: 'SET_TRIGGER'; payload: { selectedTrigger: TriggerType; value: string } }
   | { type: 'SET_SETUP'; payload: { selectedProviderId: string; selectedVersionId: string } }
+  | { type: 'SET_OUTPUT'; payload: { destination: 'slack' | 'telegram' | null; slackChannel: string; telegramChat: string } }
 
 const initialState: FormState = {
   trigger: {
@@ -26,6 +32,11 @@ const initialState: FormState = {
   setup: {
     selectedProviderId: '',
     selectedVersionId: ''
+  },
+  output: {
+    destination: null,
+    slackChannel: '',
+    telegramChat: ''
   }
 }
 
@@ -41,6 +52,11 @@ function formReducer(state: FormState, action: FormAction): FormState {
         ...state,
         setup: action.payload
       }
+    case 'SET_OUTPUT':
+      return {
+        ...state,
+        output: action.payload
+      }
     default:
       return state
   }
@@ -51,6 +67,7 @@ type FormContextType = {
   dispatch: React.Dispatch<FormAction>
   isTriggerValid: () => boolean
   isSetupValid: () => boolean
+  isOutputValid: () => boolean
   canProceedToNext: (currentTab: string) => boolean
 }
 
@@ -70,6 +87,16 @@ export function FormProvider({ children }: { children: ReactNode }) {
     return state.setup.selectedProviderId !== '' && state.setup.selectedVersionId !== ''
   }
 
+  const isOutputValid = () => {
+    if (state.output.destination === 'slack') {
+      return state.output.slackChannel.trim() !== ''
+    }
+    if (state.output.destination === 'telegram') {
+      return state.output.telegramChat.trim() !== ''
+    }
+    return false
+  }
+
   const canProceedToNext = (currentTab: string) => {
     switch (currentTab) {
       case 'trigger':
@@ -78,6 +105,8 @@ export function FormProvider({ children }: { children: ReactNode }) {
         return isSetupValid()
       case 'agent':
         return true
+      case 'output':
+        return isOutputValid()
       default:
         return false
     }
@@ -89,6 +118,7 @@ export function FormProvider({ children }: { children: ReactNode }) {
       dispatch,
       isTriggerValid,
       isSetupValid,
+      isOutputValid,
       canProceedToNext
     }}>
       {children}

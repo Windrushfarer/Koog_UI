@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router'
 import TriggerPointContent from '../body/TriggerPointContent/TriggerPointContent'
 import SetupContent from '../body/SetupContent/SetupContent'
 import AgentContent from '../body/AgentContent/AgentContent'
+import OutputContent from '../body/OutputContent/OutputContent'
 import { useForm } from '@/context/FormContext.tsx'
 
 type NavigationItem = {
@@ -154,6 +155,7 @@ export default function MultiNavigationMenu({
           {activeId === 'trigger' && <TriggerPointContent />}
           {activeId === 'setup' && <SetupContent />}
           {activeId === 'agent' && <AgentContent />}
+          {activeId === 'output' && <OutputContent />}
         </div>
       </div>
     </div>
