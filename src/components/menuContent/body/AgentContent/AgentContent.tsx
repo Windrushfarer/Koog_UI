@@ -11,7 +11,7 @@ export default function AgentContent() {
   }, [search.agentStrategy])
 
   return (
-    <section>
+    <section className='h-screen'>
       <h2 className="text-xl font-semibold mb-2 text-neutral-100">Agent</h2>
       <p className="text-neutral-300 mb-4">Define agent behavior, tools, and capabilities.</p>
 

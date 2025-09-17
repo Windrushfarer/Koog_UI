@@ -8,11 +8,14 @@ type Tool = {
 
 const DEFAULT_TOOLS: Array<Tool> = [
   { id: 'weather', name: 'Weather', description: 'Get current weather and forecasts for locations.' },
-  { id: 'map', name: 'Map', description: 'Lookup places, routes, and coordinates.' }
+  { id: 'map', name: 'Map', description: 'Lookup places, routes, and coordinates.' },
+  { id: 'web-search', name: 'Web Search', description: 'Search the web in real time.' }
 ]
 
 export default function Tools() {
-  const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>({})
+  const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(DEFAULT_TOOLS.map((t) => [t.id, true]))
+  )
 
   function toggleTool(id: string) {
     setEnabledTools((prev) => ({ ...prev, [id]: !prev[id] }))

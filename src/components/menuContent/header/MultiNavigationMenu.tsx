@@ -144,7 +144,7 @@ export default function MultiNavigationMenu({
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full h-full">
       <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-center">
         <nav className="flex">
           {renderItems(items)}

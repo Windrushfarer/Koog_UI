@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useForm } from '../../../../context/FormContext'
 import { PROVIDERS, PROVIDER_VERSIONS } from './SetupContent.consts'
 import Tools from './Tools'
 import type { Provider } from './SetupContent.consts'
@@ -10,6 +9,7 @@ export default function SetupContent() {
   const { selectedProviderId, selectedVersionId } = state.setup
   const providers: Array<Provider> = PROVIDERS
   const providerVersions = PROVIDER_VERSIONS
+  const selectedProviderVersions = selectedProviderId ? providerVersions[selectedProviderId] ?? [] : []
   const [taskPrompt, setTaskPrompt] = useState('')
 
   useEffect(() => {
