@@ -8,7 +8,7 @@ interface TriggerGitHubFormProps {
 export default function TriggerGitHubForm({ value, onValueChange }: TriggerGitHubFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    // eslint-disable-next-line no-console
+     
     console.log('GitHub create trigger', { filters: value })
   }
 

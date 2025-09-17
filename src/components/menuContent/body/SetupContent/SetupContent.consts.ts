@@ -9,7 +9,7 @@ export type ProviderVersion = {
   name: string
 }
 
-export const PROVIDERS: Provider[] = [
+export const PROVIDERS: Array<Provider> = [
   { id: 'openai', name: 'OpenAI', url: 'https://platform.openai.com/' },
   { id: 'anthropic', name: 'Anthropic', url: 'https://console.anthropic.com/' },
   { id: 'google', name: 'Google AI Studio', url: 'https://aistudio.google.com/' },
@@ -18,7 +18,7 @@ export const PROVIDERS: Provider[] = [
   { id: 'mistral', name: 'Mistral', url: 'https://console.mistral.ai/' },
 ]
 
-export const PROVIDER_VERSIONS: Record<Provider['id'], ProviderVersion[]> = {
+export const PROVIDER_VERSIONS: Record<Provider['id'], Array<ProviderVersion>> = {
   openai: [
     { id: 'gpt-4o', name: 'gpt-4o' },
     { id: 'gpt-4o-mini', name: 'gpt-4o-mini' },
