@@ -18,11 +18,15 @@ export default function NavigationManager() {
 
   const activeId = search.tab || 'trigger'
 
+  // Log navigation and validation state for debugging
+  // eslint-disable-next-line no-console
+  console.log('[Navigation] activeId:', activeId)
+
   const goToNextStep = () => {
     const currentIndex = defaultNavigation.findIndex(item => item.id === activeId)
     if (currentIndex < defaultNavigation.length - 1 && canProceedToNext(activeId)) {
       const nextId = defaultNavigation[currentIndex + 1].id
-      void navigate({ to: '/', search: { tab: nextId } })
+      void navigate({ to: '/', search: { tab: nextId, agentStrategy: search.agentStrategy } })
     }
   }
 
@@ -37,7 +41,11 @@ export default function NavigationManager() {
       currentStep={activeId}
     >
       <MultiNavigationMenu />
-      <FloatingNextButton />
+      <div className="sticky bottom-0 z-40 flex justify-end pointer-events-none">
+        <div className="pointer-events-auto p-4">
+          <FloatingNextButton />
+        </div>
+      </div>
     </NavigationProvider>
   )
 }

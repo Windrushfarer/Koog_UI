@@ -2,15 +2,20 @@
 
 html {
   background-color: var(--color-neutral-950);
+  min-height: 100%;
 }
 
 body {
-  @apply m-0 bg-neutral-950 text-neutral-100;
+  margin: 0;
+  background-color: var(--color-neutral-950);
+  color: var(--color-neutral-100);
+  min-height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
     "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color-scheme: dark;
 }
 
 code {
