@@ -70,6 +70,10 @@ type EdgeWithGeometry = {
 };
 
 type PathData = { d: string };
+type ConnectorHighlight = {
+  input: boolean;
+  output: boolean;
+};
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const snap = (v: number, step = GRID) => Math.round(v / step) * step;
@@ -757,6 +761,58 @@ export default function CanvasPage() {
     const d = `M ${start.x} ${start.y} Q ${cp.x} ${cp.y} ${connectPreview.x} ${connectPreview.y}`;
     return { d };
   }, [mode, connectSourceId, connectPreview, nodeMapRender]);
+
+  const connectorHighlights = useMemo(() => {
+    const highlights = new Map<string, ConnectorHighlight>();
+    if (mode !== "connect") {
+      return highlights;
+    }
+
+    const ensure = (id: string) => {
+      if (!highlights.has(id)) {
+        highlights.set(id, { input: false, output: false });
+      }
+      return highlights.get(id)!;
+    };
+    const markInput = (id: string) => {
+      ensure(id).input = true;
+    };
+    const markOutput = (id: string) => {
+      ensure(id).output = true;
+    };
+    const highlightDefaultForNode = (node: NodeData | undefined | null) => {
+      if (!node) return;
+      if (node.id === FINISH_NODE_ID) {
+        markInput(node.id);
+      } else {
+        markOutput(node.id);
+      }
+    };
+
+    const hoveredNodeId = hover.type === "node" ? hover.id : null;
+
+    if (connectSourceId) {
+      let connectionHighlighted = false;
+      if (hoveredNodeId && hoveredNodeId !== connectSourceId) {
+        const connection = resolveConnection(connectSourceId, hoveredNodeId);
+        if (connection) {
+          markOutput(connection.source.id);
+          markInput(connection.target.id);
+          connectionHighlighted = true;
+        }
+      }
+      if (!connectionHighlighted) {
+        highlightDefaultForNode(nodeMapRender.get(connectSourceId));
+      }
+      return highlights;
+    }
+
+    if (!connectSourceId && hoveredNodeId) {
+      highlightDefaultForNode(nodeMapRender.get(hoveredNodeId));
+    }
+
+    return highlights;
+  }, [mode, connectSourceId, hover, nodeMapRender, resolveConnection]);
   function edgeGeometry(edge: EdgeData): EdgeGeometry | null {
     const s = nodeMapRender.get(edge.sourceId);
     const t = nodeMapRender.get(edge.targetId);
@@ -1000,6 +1056,9 @@ export default function CanvasPage() {
               const desiredCursor = mode === "connect" ? "crosshair" : !isSelected && isHovered ? "pointer" : "grab";
               const inputAnchor = fixedInputAnchor(n);
               const outputAnchor = fixedOutputAnchor(n);
+              const connectorHighlight = connectorHighlights.get(n.id);
+              const highlightInput = Boolean(connectorHighlight?.input);
+              const highlightOutput = Boolean(connectorHighlight?.output);
               return (
                 <g
                   key={n.id}
@@ -1077,10 +1136,50 @@ export default function CanvasPage() {
                   ) : null}
                   <g style={{ pointerEvents: "none" }}>
                     {n.id !== START_NODE_ID && (
-                      <circle cx={inputAnchor.x} cy={inputAnchor.y} r={5.5} fill={inputColor} stroke={nodeFill} strokeWidth={1.5} />
+                      <>
+                        <circle
+                          cx={inputAnchor.x}
+                          cy={inputAnchor.y}
+                          r={5.5}
+                          fill={inputColor}
+                          stroke={highlightInput ? selectedBlue : nodeFill}
+                          strokeWidth={highlightInput ? 2.2 : 1.5}
+                        />
+                        {highlightInput ? (
+                          <circle
+                            cx={inputAnchor.x}
+                            cy={inputAnchor.y}
+                            r={8}
+                            fill="none"
+                            stroke={selectedBlue}
+                            strokeWidth={1.2}
+                            strokeOpacity={0.6}
+                          />
+                        ) : null}
+                      </>
                     )}
                     {n.id !== FINISH_NODE_ID && (
-                      <circle cx={outputAnchor.x} cy={outputAnchor.y} r={5.5} fill={outputColor} stroke={nodeFill} strokeWidth={1.5} />
+                      <>
+                        <circle
+                          cx={outputAnchor.x}
+                          cy={outputAnchor.y}
+                          r={5.5}
+                          fill={outputColor}
+                          stroke={highlightOutput ? selectedBlue : nodeFill}
+                          strokeWidth={highlightOutput ? 2.2 : 1.5}
+                        />
+                        {highlightOutput ? (
+                          <circle
+                            cx={outputAnchor.x}
+                            cy={outputAnchor.y}
+                            r={8}
+                            fill="none"
+                            stroke={selectedBlue}
+                            strokeWidth={1.2}
+                            strokeOpacity={0.6}
+                          />
+                        ) : null}
+                      </>
                     )}
                   </g>
                 </g>
