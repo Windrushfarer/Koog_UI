@@ -8,6 +8,7 @@ export default function SetupContent() {
   const { selectedProviderId, selectedVersionId } = state.setup
   const providers: Array<Provider> = PROVIDERS
   const providerVersions = PROVIDER_VERSIONS
+  const selectedProviderVersions = selectedProviderId ? providerVersions[selectedProviderId] ?? [] : []
 
   useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
@@ -91,7 +92,7 @@ export default function SetupContent() {
               })
             }}
           >
-            {(providerVersions[selectedProviderId] || []).map((v) => (
+            {selectedProviderVersions.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name}
               </option>

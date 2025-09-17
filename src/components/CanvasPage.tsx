@@ -29,8 +29,16 @@ const START_NODE_ID = "agent-start-node";
 const FINISH_NODE_ID = "agent-finish-node";
 
 type Point = { x: number; y: number };
-type NodeData = { id: string; x: number; y: number; width: number; height: number; label: string };
-type EdgeData = { id: string; sourceId: string; targetId: string; cx: number; cy: number };
+type NodeData = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+  outputCount: number;
+};
+type EdgeData = { id: string; sourceId: string; sourcePort: number; targetId: string; cx: number; cy: number };
 type ViewState = { scale: number; panX: number; panY: number };
 type Mode = "select" | "add-node" | "connect";
 type Selection = { type: "node"; id: string } | { type: "edge"; id: string } | { type: null; id: null };
@@ -73,7 +81,12 @@ type EdgeWithGeometry = {
 type PathData = { d: string };
 type ConnectorHighlight = {
   input: boolean;
-  output: boolean;
+  outputs: Set<number>;
+};
+
+type ConnectSourceState = {
+  nodeId: string;
+  port: number;
 };
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -83,9 +96,52 @@ function nodeCenter(n: NodeData) {
   return { cx: n.x + n.width / 2, cy: n.y + n.height / 2 };
 }
 
-function fixedOutputAnchor(node: NodeData): Point {
-  const { cx, cy } = nodeCenter(node);
-  return { x: cx + node.width / 2, y: cy };
+function outputAnchors(node: NodeData): Array<Point> {
+  const count = Math.max(0, node.outputCount);
+  if (count === 0) return [];
+  const anchors: Array<Point> = [];
+  const x = node.x + node.width;
+  if (count === 1) {
+    anchors.push({ x, y: node.y + node.height / 2 });
+    return anchors;
+  }
+  const margin = Math.min(node.height / 4, 22);
+  const usable = Math.max(node.height - margin * 2, 0);
+  const step = count > 1 ? usable / (count - 1 || 1) : 0;
+  for (let i = 0; i < count; i += 1) {
+    anchors.push({ x, y: node.y + margin + step * i });
+  }
+  return anchors;
+}
+
+function fixedOutputAnchor(node: NodeData, portIndex = 0): Point {
+  const all = outputAnchors(node);
+  if (!all.length) {
+    const { cx, cy } = nodeCenter(node);
+    return { x: cx + node.width / 2, y: cy };
+  }
+  const idx = clamp(portIndex, 0, all.length - 1);
+  return all[idx];
+}
+
+function closestOutputPort(node: NodeData, point: Point | null): number {
+  const anchors = outputAnchors(node);
+  if (!anchors.length || !point) {
+    return 0;
+  }
+  let bestIndex = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < anchors.length; i += 1) {
+    const anchor = anchors[i];
+    const dx = point.x - anchor.x;
+    const dy = point.y - anchor.y;
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
 }
 
 function fixedInputAnchor(node: NodeData): Point {
@@ -168,11 +224,18 @@ const VerificationIcon = ({ className = "w-4 h-4" }: IconProps) => (
 );
 
 const paletteTemplates: Array<PaletteTemplate> = [
-  { id: "call-llm", label: "Ask LLM", icon: CallLLMIcon },
+  { id: "ask-llm", label: "Ask LLM", icon: CallLLMIcon },
   { id: "tool-call", label: "Tool call", icon: ToolCallIcon },
   { id: "task", label: "Task", icon: TaskIcon },
   { id: "llm-judge", label: "LLM Judge", icon: VerificationIcon },
 ];
+
+const templateOutputCounts: Record<string, number> = {
+  "ask-llm": 2,
+  "tool-call": 1,
+  task: 1,
+  "llm-judge": 1,
+};
 
 type PaletteButtonProps = {
   template: PaletteTemplate;
@@ -235,15 +298,15 @@ export default function CanvasPage() {
   const [mode, setMode] = useState<Mode>("select");
   const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Array<NodeData>>([
-    { id: START_NODE_ID, x: 140, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Start" },
-    { id: FINISH_NODE_ID, x: 480, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Finish" },
+    { id: START_NODE_ID, x: 140, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Start", outputCount: 1 },
+    { id: FINISH_NODE_ID, x: 480, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Finish", outputCount: 0 },
   ]);
   const [edges, setEdges] = useState<Array<EdgeData>>([]);
 
   // Selection & hover
   const [selection, setSelection] = useState<Selection>({ type: null, id: null });
   const [hover, setHover] = useState<HoverState>({ type: null, id: null });
-  const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
+  const [connectSource, setConnectSource] = useState<ConnectSourceState | null>(null);
   const [connectPreview, setConnectPreview] = useState<Point | null>(null);
   const [nodePreview, setNodePreview] = useState<Point | null>(null);
   const [isPointerInsideCanvas, setIsPointerInsideCanvas] = useState(false);
@@ -258,6 +321,7 @@ export default function CanvasPage() {
   const panDeltaRef = useRef<PanDelta>({ dx: 0, dy: 0 });
   const panRafRef = useRef<number>(0);
   const lastPointerWorldRef = useRef<Point | null>(null);
+  const [pointerWorld, setPointerWorld] = useState<Point | null>(null);
   const editingInputRef = useRef<HTMLInputElement | null>(null);
 
   const commitLabelEdit = useCallback(
@@ -353,8 +417,9 @@ export default function CanvasPage() {
         }
       }
       if (e.key.toLowerCase() === "c") {
+        e.preventDefault();
         setPendingTemplateId(null);
-        setMode((currentMode) => (currentMode === "connect" ? "select" : "connect"));
+        activateConnectMode();
       }
       if (e.key === "Escape") {
         if ((mode === "add-node" && currentTemplate) || mode === "connect") {
@@ -444,13 +509,14 @@ export default function CanvasPage() {
   );
 
   useEffect(() => {
-    if (!connectSourceId) {
+    if (!connectSource) {
       setConnectPreview(null);
     }
-  }, [connectSourceId]);
+  }, [connectSource]);
 
   useEffect(() => {
     if (mode !== "connect") {
+      setConnectSource(null);
       setConnectPreview(null);
     }
   }, [mode]);
@@ -518,7 +584,8 @@ export default function CanvasPage() {
             const s = nodeMap.get(ed.sourceId);
             const t = nodeMap.get(ed.targetId);
             if (!s || !t) return ed;
-            const p0 = fixedOutputAnchor(s);
+            const portIndex = clamp(ed.sourcePort, 0, Math.max(0, s.outputCount - 1));
+            const p0 = fixedOutputAnchor(s, portIndex);
             const p2 = fixedInputAnchor(t);
             const snapped: Point = {
               x: clamp(snap(pw.x), WORLD.minX, WORLD.maxX),
@@ -568,7 +635,7 @@ export default function CanvasPage() {
   const activateSelectMode = () => {
     setMode("select");
     setPendingTemplateId(null);
-    setConnectSourceId(null);
+    setConnectSource(null);
     setConnectPreview(null);
     setNodePreview(null);
   };
@@ -579,7 +646,7 @@ export default function CanvasPage() {
     }
     setMode("connect");
     setPendingTemplateId(null);
-    setConnectSourceId(null);
+    setConnectSource(null);
     setConnectPreview(null);
     setNodePreview(null);
   };
@@ -588,7 +655,7 @@ export default function CanvasPage() {
       activateSelectMode();
       return;
     }
-    setConnectSourceId(null);
+    setConnectSource(null);
     setMode("add-node");
     setPendingTemplateId(templateId);
   };
@@ -608,8 +675,9 @@ export default function CanvasPage() {
     setIsPointerInsideCanvas(true);
     const pw = getWorldPoint(e.clientX, e.clientY);
     lastPointerWorldRef.current = pw;
+    setPointerWorld(pw);
     if (spacePressed) return;
-    if (mode === "connect" && connectSourceId) {
+    if (mode === "connect" && connectSource) {
       setConnectPreview(pw);
     } else if (mode === "add-node" && currentTemplate) {
       setNodePreview(computeNodePreviewPosition(pw));
@@ -620,13 +688,16 @@ export default function CanvasPage() {
     lastPointerWorldRef.current = pw;
 
     if (spacePressed) {
+      setPointerWorld(null);
       if (nodePreview) {
         setNodePreview(null);
       }
       return;
     }
 
-    if (mode === "connect" && connectSourceId) {
+    setPointerWorld(pw);
+
+    if (mode === "connect" && connectSource) {
       setConnectPreview(pw);
     } else if (mode === "add-node" && currentTemplate) {
       setNodePreview(computeNodePreviewPosition(pw));
@@ -649,6 +720,7 @@ export default function CanvasPage() {
       setConnectPreview(null);
     }
     setNodePreview(null);
+    setPointerWorld(null);
   };
 
   const onSVGClick = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -657,8 +729,17 @@ export default function CanvasPage() {
     if (mode === "add-node" && currentTemplate) {
       const id = uid();
       const placement = nodePreview || computeNodePreviewPosition(pw);
+      const outputCount = templateOutputCounts[currentTemplate.id] ?? 1;
       setNodes((prev) =>
-        prev.concat({ id, x: placement.x, y: placement.y, width: NODE_WIDTH, height: NODE_HEIGHT, label: currentTemplate.label })
+        prev.concat({
+          id,
+          x: placement.x,
+          y: placement.y,
+          width: NODE_WIDTH,
+          height: NODE_HEIGHT,
+          label: currentTemplate.label,
+          outputCount,
+        })
       );
       setSelection({ type: "node", id });
       if (!nodePreview) {
@@ -669,7 +750,7 @@ export default function CanvasPage() {
     }
     setSelection({ type: null, id: null });
     setHover({ type: null, id: null });
-    setConnectSourceId(null);
+    setConnectSource(null);
   };
 
   const onNodePointerDown = (e: React.PointerEvent<SVGGElement>, id: string) => {
@@ -687,44 +768,73 @@ export default function CanvasPage() {
   const onNodeClick = (e: React.MouseEvent<SVGGElement>, id: string) => {
     if (spacePressed) return;
     e.stopPropagation();
+
+    const pointer = getWorldPoint(e.clientX, e.clientY);
+    setPointerWorld(pointer);
+
     if (mode === "connect") {
-      if (!connectSourceId) {
-        setConnectSourceId(id);
+      const node = nodeMap.get(id);
+      if (!node) return;
+      const port = closestOutputPort(node, pointer);
+
+      if (!connectSource) {
+        setConnectSource({ nodeId: id, port });
         setSelection({ type: "node", id });
-        const pw = getWorldPoint(e.clientX, e.clientY);
-        setConnectPreview(pw);
+        setConnectPreview(pointer);
         return;
       }
-      if (connectSourceId && connectSourceId !== id) {
-        const connection = resolveConnection(connectSourceId, id);
-        if (connection) {
-          const { source, target } = connection;
-          const existing = edges.find(
-            (ed) =>
-              (ed.sourceId === source.id && ed.targetId === target.id) || (ed.sourceId === target.id && ed.targetId === source.id)
-          );
-          if (existing) {
-            setSelection({ type: "edge", id: existing.id });
-            activateSelectMode();
-            return;
-          }
-          const a = fixedOutputAnchor(source);
-          const b = fixedInputAnchor(target);
-          const cp = defaultControlPoint(a, b, 60);
-          const edgeId = uid();
-          setEdges((prev) => prev.concat({ id: edgeId, sourceId: source.id, targetId: target.id, cx: cp.x, cy: cp.y }));
-          setSelection({ type: "edge", id: edgeId });
+
+      if (connectSource.nodeId === id) {
+        setConnectSource({ nodeId: id, port });
+        setSelection({ type: "node", id });
+        setConnectPreview(pointer);
+        return;
+      }
+
+      const connection = resolveConnection(connectSource.nodeId, id);
+      if (connection) {
+        const { source, target } = connection;
+        const existing = edges.find(
+          (ed) => (ed.sourceId === source.id && ed.targetId === target.id) || (ed.sourceId === target.id && ed.targetId === source.id)
+        );
+        if (existing) {
+          setSelection({ type: "edge", id: existing.id });
           activateSelectMode();
           return;
-        } else {
-          setConnectSourceId(null);
-          setConnectPreview(null);
         }
+
+        let sourcePort = 0;
+        if (source.id === connectSource.nodeId) {
+          sourcePort = connectSource.port;
+        } else if (source.id === id) {
+          sourcePort = port;
+        } else {
+          sourcePort = closestOutputPort(source, pointer);
+        }
+
+        const outputChoices = outputAnchors(source);
+        if (outputChoices.length) {
+          sourcePort = clamp(sourcePort, 0, outputChoices.length - 1);
+        } else {
+          sourcePort = 0;
+        }
+
+        const a = fixedOutputAnchor(source, sourcePort);
+        const b = fixedInputAnchor(target);
+        const cp = defaultControlPoint(a, b, 60);
+        const edgeId = uid();
+        setEdges((prev) => prev.concat({ id: edgeId, sourceId: source.id, sourcePort, targetId: target.id, cx: cp.x, cy: cp.y }));
+        setSelection({ type: "edge", id: edgeId });
+        activateSelectMode();
         return;
       }
-    } else {
-      setSelection({ type: "node", id });
+
+      setConnectSource(null);
+      setConnectPreview(null);
+      return;
     }
+
+    setSelection({ type: "node", id });
   };
 
   const onEdgeClick = (e: React.MouseEvent<SVGPathElement>, id: string) => {
@@ -754,14 +864,14 @@ export default function CanvasPage() {
 
   const nodeMapRender = useMemo(() => new Map<string, NodeData>(nodes.map((n) => [n.id, n])), [nodes]);
   const connectPreviewPath = useMemo<PathData | null>(() => {
-    if (mode !== "connect" || !connectSourceId || !connectPreview) return null;
-    const source = nodeMapRender.get(connectSourceId);
+    if (mode !== "connect" || !connectSource || !connectPreview) return null;
+    const source = nodeMapRender.get(connectSource.nodeId);
     if (!source) return null;
-    const start = fixedOutputAnchor(source);
+    const start = fixedOutputAnchor(source, connectSource.port);
     const cp = defaultControlPoint(start, connectPreview, 60);
     const d = `M ${start.x} ${start.y} Q ${cp.x} ${cp.y} ${connectPreview.x} ${connectPreview.y}`;
     return { d };
-  }, [mode, connectSourceId, connectPreview, nodeMapRender]);
+  }, [mode, connectSource, connectPreview, nodeMapRender]);
 
   const connectorHighlights = useMemo(() => {
     const highlights = new Map<string, ConnectorHighlight>();
@@ -771,62 +881,79 @@ export default function CanvasPage() {
 
     const ensure = (id: string) => {
       if (!highlights.has(id)) {
-        highlights.set(id, { input: false, output: false });
+        highlights.set(id, { input: false, outputs: new Set<number>() });
       }
       return highlights.get(id)!;
     };
     const markInput = (id: string) => {
       ensure(id).input = true;
     };
-    const markOutput = (id: string) => {
-      ensure(id).output = true;
+    const markOutput = (id: string, portIndex = 0) => {
+      ensure(id).outputs.add(portIndex);
     };
-    const highlightDefaultForNode = (node: NodeData | undefined | null) => {
-      if (!node) return;
-      if (node.id === FINISH_NODE_ID) {
-        markInput(node.id);
-      } else {
-        markOutput(node.id);
-      }
-    };
-
     const hoveredNodeId = hover.type === "node" ? hover.id : null;
 
-    if (connectSourceId) {
+    if (connectSource) {
+      markOutput(connectSource.nodeId, connectSource.port);
       let connectionHighlighted = false;
-      if (hoveredNodeId && hoveredNodeId !== connectSourceId) {
-        const connection = resolveConnection(connectSourceId, hoveredNodeId);
+      if (hoveredNodeId && hoveredNodeId !== connectSource.nodeId) {
+        const connection = resolveConnection(connectSource.nodeId, hoveredNodeId);
         if (connection) {
-          markOutput(connection.source.id);
-          markInput(connection.target.id);
+          const { source, target } = connection;
+          const sourceNode = nodeMapRender.get(source.id);
+          const targetNode = nodeMapRender.get(target.id);
+          if (sourceNode && sourceNode.outputCount > 0) {
+            if (source.id === connectSource.nodeId) {
+              markOutput(source.id, connectSource.port);
+            } else {
+              const portIndex = closestOutputPort(sourceNode, pointerWorld);
+              markOutput(source.id, portIndex);
+            }
+          }
+          if (targetNode) {
+            markInput(targetNode.id);
+          }
           connectionHighlighted = true;
         }
       }
       if (!connectionHighlighted) {
-        highlightDefaultForNode(nodeMapRender.get(connectSourceId));
+        const sourceNode = nodeMapRender.get(connectSource.nodeId);
+        if (sourceNode && sourceNode.outputCount === 0) {
+          markInput(sourceNode.id);
+        }
       }
       return highlights;
     }
 
-    if (!connectSourceId && hoveredNodeId) {
-      highlightDefaultForNode(nodeMapRender.get(hoveredNodeId));
+    if (hoveredNodeId != null) {
+      const hoveredNode = nodeMapRender.get(hoveredNodeId);
+      if (hoveredNode) {
+        if (hoveredNode.outputCount > 0) {
+          const portIndex = closestOutputPort(hoveredNode, pointerWorld);
+          markOutput(hoveredNode.id, portIndex);
+        } else {
+          markInput(hoveredNode.id);
+        }
+      }
     }
 
     return highlights;
-  }, [mode, connectSourceId, hover, nodeMapRender, resolveConnection]);
+  }, [mode, connectSource, hover, nodeMapRender, pointerWorld, resolveConnection]);
   function edgeGeometry(edge: EdgeData): EdgeGeometry | null {
     const s = nodeMapRender.get(edge.sourceId);
     const t = nodeMapRender.get(edge.targetId);
     if (!s || !t) return null;
-    const p0 = fixedOutputAnchor(s);
+    const maxPort = Math.max(0, s.outputCount - 1);
+    const portIndex = clamp(edge.sourcePort, 0, maxPort);
+    const p0 = fixedOutputAnchor(s, portIndex);
     const p2 = fixedInputAnchor(t);
     const c: Point = { x: edge.cx, y: edge.cy };
     const d = `M ${p0.x} ${p0.y} Q ${c.x} ${c.y} ${p2.x} ${p2.y}`;
     const tMid = 0.5;
     const mid = qPoint(p0, c, p2, tMid);
     const [dirX, dirY] = vecNormalize(p2.x - c.x, p2.y - c.y);
-    const arrowLength = 14;
-    const arrowWidth = 12;
+    const arrowLength = 10;
+    const arrowWidth = 7;
     const baseX = p2.x - dirX * arrowLength;
     const baseY = p2.y - dirY * arrowLength;
     const [perpX, perpY] = vecNormalize(...normal2D(dirX, dirY));
@@ -1084,10 +1211,10 @@ export default function CanvasPage() {
               const displayLabel = n.label;
               const desiredCursor = mode === "connect" ? "crosshair" : !isSelected && isHovered ? "pointer" : "grab";
               const inputAnchor = fixedInputAnchor(n);
-              const outputAnchor = fixedOutputAnchor(n);
               const connectorHighlight = connectorHighlights.get(n.id);
               const highlightInput = Boolean(connectorHighlight?.input);
-              const highlightOutput = Boolean(connectorHighlight?.output);
+              const highlightedOutputs = connectorHighlight?.outputs;
+              const outputPoints = outputAnchors(n);
               return (
                 <g
                   key={n.id}
@@ -1187,29 +1314,32 @@ export default function CanvasPage() {
                         ) : null}
                       </>
                     )}
-                    {n.id !== FINISH_NODE_ID && (
-                      <>
-                        <circle
-                          cx={outputAnchor.x}
-                          cy={outputAnchor.y}
-                          r={5.5}
-                          fill={outputColor}
-                          stroke={highlightOutput ? selectedBlue : nodeFill}
-                          strokeWidth={highlightOutput ? 2.2 : 1.5}
-                        />
-                        {highlightOutput ? (
+                    {outputPoints.map((anchor, index) => {
+                      const isHighlighted = Boolean(highlightedOutputs?.has(index));
+                      return (
+                        <g key={`output-${index}`}>
                           <circle
-                            cx={outputAnchor.x}
-                            cy={outputAnchor.y}
-                            r={8}
-                            fill="none"
-                            stroke={selectedBlue}
-                            strokeWidth={1.2}
-                            strokeOpacity={0.6}
+                            cx={anchor.x}
+                            cy={anchor.y}
+                            r={5.5}
+                            fill={outputColor}
+                            stroke={isHighlighted ? selectedBlue : nodeFill}
+                            strokeWidth={isHighlighted ? 2.2 : 1.5}
                           />
-                        ) : null}
-                      </>
-                    )}
+                          {isHighlighted ? (
+                            <circle
+                              cx={anchor.x}
+                              cy={anchor.y}
+                              r={8}
+                              fill="none"
+                              stroke={selectedBlue}
+                              strokeWidth={1.2}
+                              strokeOpacity={0.6}
+                            />
+                          ) : null}
+                        </g>
+                      );
+                    })}
                   </g>
                 </g>
               );
@@ -1219,7 +1349,7 @@ export default function CanvasPage() {
 
         <div className="absolute bottom-2 left-2 text-[11px] bg-neutral-900/80 backdrop-blur px-2 py-1 rounded-md border border-neutral-700 text-neutral-300">
           Mode: <span className="font-semibold">{humanMode}</span>
-          {mode === "connect" && connectSourceId ? <span className="ml-2">(pick a target)</span> : null}
+          {mode === "connect" && connectSource ? <span className="ml-2">(pick a target)</span> : null}
         </div>
         <div className="absolute bottom-2 right-2 text-[11px] bg-neutral-900/80 backdrop-blur px-2 py-1 rounded-md border border-neutral-700 text-neutral-200">
           {Math.round(scale * 100)}%
