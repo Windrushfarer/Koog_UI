@@ -61,6 +61,7 @@ type EdgeGeometry = {
   c: Point;
   tMid: number;
   mid: Point;
+  arrowPath: string;
 };
 
 type EdgeWithGeometry = {
@@ -823,7 +824,19 @@ export default function CanvasPage() {
     const d = `M ${p0.x} ${p0.y} Q ${c.x} ${c.y} ${p2.x} ${p2.y}`;
     const tMid = 0.5;
     const mid = qPoint(p0, c, p2, tMid);
-    return { d, p0, p2, c, tMid, mid };
+    const [dirX, dirY] = vecNormalize(p2.x - c.x, p2.y - c.y);
+    const arrowLength = 14;
+    const arrowWidth = 12;
+    const baseX = p2.x - dirX * arrowLength;
+    const baseY = p2.y - dirY * arrowLength;
+    const [perpX, perpY] = vecNormalize(...normal2D(dirX, dirY));
+    const halfWidth = arrowWidth / 2;
+    const leftX = baseX + perpX * halfWidth;
+    const leftY = baseY + perpY * halfWidth;
+    const rightX = baseX - perpX * halfWidth;
+    const rightY = baseY - perpY * halfWidth;
+    const arrowPath = `M ${p2.x} ${p2.y} L ${leftX} ${leftY} L ${rightX} ${rightY} Z`;
+    return { d, p0, p2, c, tMid, mid, arrowPath };
   }
 
   const edgesWithGeometry = useMemo(() => {
@@ -948,6 +961,22 @@ export default function CanvasPage() {
                       fill="none"
                       strokeOpacity={highlightOpacity}
                       strokeLinecap="round"
+                      style={{ pointerEvents: "none" }}
+                    />
+                  )}
+                  <path
+                    d={g.arrowPath}
+                    fill={gradientStroke}
+                    stroke={nodeFill}
+                    strokeWidth={0.8}
+                    style={{ pointerEvents: "none" }}
+                  />
+                  {(isHovered || isSelected) && (
+                    <path
+                      d={g.arrowPath}
+                      fill={highlightStroke}
+                      fillOpacity={highlightOpacity}
+                      stroke="none"
                       style={{ pointerEvents: "none" }}
                     />
                   )}
