@@ -29,8 +29,8 @@ const MIN_SCALE = 0.5
 const MAX_SCALE = 3
 const BG_EXTENT = 100000 // big world rect for full-bleed grid
 const WORLD = { minX: -3000, minY: -3000, maxX: 3000, maxY: 3000 }
-const NODE_WIDTH = 220
-const NODE_HEIGHT = 112
+const NODE_WIDTH = 200
+const NODE_HEIGHT = 200
 const TOOL_OPTIONS = ['Web Search', 'Weather', 'Map']
 
 type Point = { x: number; y: number }
@@ -628,12 +628,18 @@ export default function CanvasPage() {
     (kind: NodeKind, name: string): NodeConfigMap[NodeKind] => {
       switch (kind) {
         case 'ask-llm':
+          return {
+            name,
+            providerId: '',
+            modelId: '',
+            prompt: 'You are a helpful assistant',
+          }
         case 'llm-judge':
           return {
             name,
             providerId: '',
             modelId: '',
-            prompt: '',
+            prompt: 'Critique the user\'s response',
           }
         case 'ask-user':
           return {
@@ -1837,8 +1843,8 @@ export default function CanvasPage() {
     const tMid = 0.5
     const mid = qPoint(p0, c, p2, tMid)
     const [dirX, dirY] = vecNormalize(p2.x - c.x, p2.y - c.y)
-    const arrowLength = 10
-    const arrowWidth = 7
+    const arrowLength = 24
+    const arrowWidth = 24
     const baseX = p2.x - dirX * arrowLength
     const baseY = p2.y - dirY * arrowLength
     const [perpX, perpY] = vecNormalize(...normal2D(dirX, dirY))
@@ -2242,16 +2248,13 @@ export default function CanvasPage() {
               const gradientStroke = `url(#${gradientId})`
               const highlightStroke = isSelected ? selectedBlue : lightBlue
               const highlightOpacity = isSelected ? 0.55 : 0.35
-              const labelWidth = 44
-              const labelHeight = 16
-              const labelOffset = 20
               const fieldLabel = edge.fieldName
                 ? `transformed { ${edge.fieldName} }`
                 : null
               const fieldLabelWidth = fieldLabel
-                ? Math.max(100, fieldLabel.length * 6.1 + 24)
+                ? Math.max(100, fieldLabel.length * 6.1 + 64)
                 : 0
-              const fieldLabelHeight = 18
+              const fieldLabelHeight = 32
               const fieldLabelOffset = 28
               const fieldAnchorX = fieldLabel ? g.mid.x : 0
               const fieldAnchorY = fieldLabel ? g.mid.y - fieldLabelOffset : 0
@@ -2316,7 +2319,7 @@ export default function CanvasPage() {
                         dominantBaseline="middle"
                         textAnchor="middle"
                         fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                        fontSize={9}
+                        fontSize={18}
                         fill={isSelected ? selectedBlue : '#cbd5f5'}
                         fillOpacity={isSelected ? 0.95 : 0.8}
                       >
@@ -2372,38 +2375,11 @@ export default function CanvasPage() {
                       <circle
                         cx={g.mid.x}
                         cy={g.mid.y}
-                        r={10}
+                        r={14}
                         fill={nodeFill}
                         stroke={gradientStroke}
                         strokeWidth={2}
                       />
-                      <g
-                        transform={`translate(${g.mid.x} ${g.mid.y - labelOffset})`}
-                      >
-                        <rect
-                          x={-labelWidth / 2}
-                          y={-labelHeight / 2}
-                          width={labelWidth}
-                          height={labelHeight}
-                          rx={labelHeight / 2}
-                          fill={nodeFill}
-                          fillOpacity={0.92}
-                          stroke={gradientStroke}
-                          strokeWidth={1}
-                        />
-                        <text
-                          x={0}
-                          y={0}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                          fontSize={9}
-                          fontWeight={600}
-                          fill={gradientStroke}
-                        >
-                          Adjust
-                        </text>
-                      </g>
                     </g>
                   )}
                 </g>
@@ -2441,7 +2417,7 @@ export default function CanvasPage() {
                   y={nodePreview.y + NODE_HEIGHT / 2 + 4}
                   textAnchor="middle"
                   fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                  fontSize={13}
+                  fontSize={16}
                   fill="#bae6fd"
                   fillOpacity={0.7}
                 >
@@ -2554,7 +2530,7 @@ export default function CanvasPage() {
                         y={n.y - 8}
                         textAnchor="middle"
                         fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                        fontSize={15}
+                        fontSize={20}
                         fill="#94a3b8"
                         onDoubleClick={(e) => {
                           e.stopPropagation()
@@ -2587,7 +2563,7 @@ export default function CanvasPage() {
                       y={n.y + n.height / 2 + 4}
                       textAnchor="middle"
                       fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                      fontSize={18}
+                      fontSize={32}
                       fill={nodeText}
                     >
                       {displayLabel}
@@ -2617,13 +2593,13 @@ export default function CanvasPage() {
                         ) : null}
                         {n.inputType ? (
                           <g
-                            transform={`translate(${inputAnchor.x - 58} ${inputAnchor.y - 22})`}
+                            transform={`translate(${inputAnchor.x - 72} ${inputAnchor.y - 24})`}
                           >
                             <rect
-                              x={0}
-                              y={0}
-                              width={56}
-                              height={18}
+                              x={-8}
+                              y={-6}
+                              width={72}
+                              height={24}
                               rx={6}
                               ry={6}
                               fill="#0f172a"
@@ -2636,7 +2612,7 @@ export default function CanvasPage() {
                               y={12}
                               textAnchor="middle"
                               fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                              fontSize={9}
+                              fontSize={16}
                               fill={highlightInput ? selectedBlue : '#cbd5f5'}
                               fillOpacity={highlightInput ? 0.95 : 0.75}
                             >
@@ -2713,13 +2689,13 @@ export default function CanvasPage() {
                             />
                           ) : null}
                           <g
-                            transform={`translate(${anchor.x + 8} ${anchor.y - 16})`}
+                            transform={`translate(${anchor.x + 32} ${anchor.y - 24})`}
                           >
                             <rect
-                              x={0}
-                              y={0}
-                              width={56}
-                              height={16}
+                              x={-24}
+                              y={-6}
+                              width={104}
+                              height={24}
                               rx={6}
                               ry={6}
                               fill="#0f172a"
@@ -2732,7 +2708,7 @@ export default function CanvasPage() {
                               y={11}
                               textAnchor="middle"
                               fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                              fontSize={9}
+                              fontSize={16}
                               fill={isHighlighted ? selectedBlue : '#cbd5f5'}
                               fillOpacity={isHighlighted ? 0.95 : 0.75}
                             >
@@ -2823,7 +2799,7 @@ export default function CanvasPage() {
                               y={optionHeight / 2 + 4}
                               textAnchor="start"
                               fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
-                              fontSize={11}
+                              fontSize={18}
                               fill="#e2e8f0"
                             >
                               {`${option.name}: ${option.type}`}
