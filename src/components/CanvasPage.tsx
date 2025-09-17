@@ -29,6 +29,8 @@ const START_NODE_ID = "agent-start-node";
 const FINISH_NODE_ID = "agent-finish-node";
 
 type Point = { x: number; y: number };
+type PortType = "String" | "ToolCall" | "ToolResult";
+
 type NodeData = {
   id: string;
   x: number;
@@ -36,7 +38,8 @@ type NodeData = {
   width: number;
   height: number;
   label: string;
-  outputCount: number;
+  inputType: PortType | null;
+  outputTypes: Array<PortType>;
 };
 type EdgeData = { id: string; sourceId: string; sourcePort: number; targetId: string; cx: number; cy: number };
 type ViewState = { scale: number; panX: number; panY: number };
@@ -56,6 +59,8 @@ type PaletteTemplate = {
   id: string;
   label: string;
   icon: (props: IconProps) => ReactElement;
+  inputType: PortType | null;
+  outputTypes: Array<PortType>;
 };
 
 type IconProps = {
@@ -94,7 +99,8 @@ type GraphNodeSnapshot = {
   label: string;
   position: Point;
   size: { width: number; height: number };
-  outputCount: number;
+  inputType: PortType | null;
+  outputTypes: Array<PortType>;
 };
 
 type GraphEdgeSnapshot = {
@@ -103,6 +109,7 @@ type GraphEdgeSnapshot = {
   sourcePort: number;
   targetId: string;
   control: Point;
+  outputType: PortType | null;
 };
 
 type GraphSnapshot = {
@@ -118,7 +125,7 @@ function nodeCenter(n: NodeData) {
 }
 
 function outputAnchors(node: NodeData): Array<Point> {
-  const count = Math.max(0, node.outputCount);
+  const count = Math.max(0, node.outputTypes.length);
   if (count === 0) return [];
   const anchors: Array<Point> = [];
   const x = node.x + node.width;
@@ -161,6 +168,33 @@ function closestOutputPort(node: NodeData, point: Point | null): number {
       bestDist = dist;
       bestIndex = i;
     }
+  }
+  return bestIndex;
+}
+
+function closestOutputPortOfType(node: NodeData, portType: PortType | null, point: Point | null): number {
+  const anchors = outputAnchors(node);
+  if (!anchors.length) return -1;
+  if (!portType) {
+    return closestOutputPort(node, point);
+  }
+  let bestIndex = -1;
+  let bestDist = Infinity;
+  if (point) {
+    for (let i = 0; i < anchors.length; i += 1) {
+      if (node.outputTypes[i] !== portType) continue;
+      const anchor = anchors[i];
+      const dx = point.x - anchor.x;
+      const dy = point.y - anchor.y;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIndex = i;
+      }
+    }
+  }
+  if (bestIndex === -1) {
+    bestIndex = node.outputTypes.findIndex((type) => type === portType);
   }
   return bestIndex;
 }
@@ -245,18 +279,11 @@ const VerificationIcon = ({ className = "w-4 h-4" }: IconProps) => (
 );
 
 const paletteTemplates: Array<PaletteTemplate> = [
-  { id: "ask-llm", label: "Ask LLM", icon: CallLLMIcon },
-  { id: "tool-call", label: "Tool call", icon: ToolCallIcon },
-  { id: "task", label: "Task", icon: TaskIcon },
-  { id: "llm-judge", label: "LLM Judge", icon: VerificationIcon },
+  { id: "ask-llm", label: "Ask LLM", icon: CallLLMIcon, inputType: "String", outputTypes: ["String", "ToolCall"] },
+  { id: "tool-call", label: "Tool call", icon: ToolCallIcon, inputType: "ToolCall", outputTypes: ["ToolResult"] },
+  { id: "task", label: "Task", icon: TaskIcon, inputType: "String", outputTypes: ["String"] },
+  { id: "llm-judge", label: "LLM Judge", icon: VerificationIcon, inputType: "String", outputTypes: ["String", "String"] },
 ];
-
-const templateOutputCounts: Record<string, number> = {
-  "ask-llm": 2,
-  "tool-call": 1,
-  task: 1,
-  "llm-judge": 1,
-};
 
 type PaletteButtonProps = {
   template: PaletteTemplate;
@@ -319,8 +346,26 @@ export default function CanvasPage() {
   const [mode, setMode] = useState<Mode>("select");
   const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Array<NodeData>>([
-    { id: START_NODE_ID, x: 140, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Start", outputCount: 1 },
-    { id: FINISH_NODE_ID, x: 480, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Finish", outputCount: 0 },
+    {
+      id: START_NODE_ID,
+      x: 140,
+      y: 240,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+      label: "Start",
+      inputType: null,
+      outputTypes: ["String"],
+    },
+    {
+      id: FINISH_NODE_ID,
+      x: 480,
+      y: 240,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+      label: "Finish",
+      inputType: "String",
+      outputTypes: [],
+    },
   ]);
   const [edges, setEdges] = useState<Array<EdgeData>>([]);
 
@@ -624,7 +669,7 @@ export default function CanvasPage() {
             const s = nodeMap.get(ed.sourceId);
             const t = nodeMap.get(ed.targetId);
             if (!s || !t) return ed;
-            const portIndex = clamp(ed.sourcePort, 0, Math.max(0, s.outputCount - 1));
+            const portIndex = clamp(ed.sourcePort, 0, Math.max(0, s.outputTypes.length - 1));
             const p0 = fixedOutputAnchor(s, portIndex);
             const p2 = fixedInputAnchor(t);
             const snapped: Point = {
@@ -751,7 +796,7 @@ export default function CanvasPage() {
     if (mode === "add-node" && currentTemplate) {
       const id = uid();
       const placement = nodePreview || computeNodePreviewPosition(pw);
-      const outputCount = templateOutputCounts[currentTemplate.id] ?? 1;
+      const outputTypes = [...currentTemplate.outputTypes];
       setNodes((prev) =>
         prev.concat({
           id,
@@ -760,7 +805,8 @@ export default function CanvasPage() {
           width: NODE_WIDTH,
           height: NODE_HEIGHT,
           label: currentTemplate.label,
-          outputCount,
+          inputType: currentTemplate.inputType,
+          outputTypes,
         })
       );
       setSelection({ type: "node", id });
@@ -797,6 +843,10 @@ export default function CanvasPage() {
     if (mode === "connect") {
       const node = nodeMap.get(id);
       if (!node) return;
+      if (!connectSource && node.outputTypes.length === 0) {
+        setSelection({ type: "node", id });
+        return;
+      }
       const port = closestOutputPort(node, pointer);
 
       if (!connectSource) {
@@ -825,20 +875,32 @@ export default function CanvasPage() {
           return;
         }
 
-        let sourcePort = 0;
-        if (source.id === connectSource.nodeId) {
-          sourcePort = connectSource.port;
-        } else if (source.id === id) {
-          sourcePort = port;
-        } else {
-          sourcePort = closestOutputPort(source, pointer);
+        if (source.outputTypes.length === 0) {
+          return;
         }
 
-        const outputChoices = outputAnchors(source);
-        if (outputChoices.length) {
-          sourcePort = clamp(sourcePort, 0, outputChoices.length - 1);
+        let sourcePort: number;
+        if (source.id === connectSource.nodeId) {
+          sourcePort = clamp(connectSource.port, 0, Math.max(0, source.outputTypes.length - 1));
+        } else if (source.id === id) {
+          sourcePort = clamp(port, 0, Math.max(0, source.outputTypes.length - 1));
         } else {
-          sourcePort = 0;
+          const initialPort = target.inputType
+            ? closestOutputPortOfType(source, target.inputType, pointer)
+            : closestOutputPort(source, pointer);
+          if (initialPort === -1) {
+            return;
+          }
+          sourcePort = clamp(initialPort, 0, Math.max(0, source.outputTypes.length - 1));
+        }
+
+        const targetInputType = target.inputType;
+        if (targetInputType && source.outputTypes[sourcePort] !== targetInputType) {
+          return;
+        }
+
+        if (sourcePort < 0 || sourcePort >= source.outputTypes.length) {
+          return;
         }
 
         const a = fixedOutputAnchor(source, sourcePort);
@@ -887,13 +949,44 @@ export default function CanvasPage() {
   const nodeMapRender = useMemo(() => new Map<string, NodeData>(nodes.map((n) => [n.id, n])), [nodes]);
   const connectPreviewPath = useMemo<PathData | null>(() => {
     if (mode !== "connect" || !connectSource || !connectPreview) return null;
-    const source = nodeMapRender.get(connectSource.nodeId);
-    if (!source) return null;
-    const start = fixedOutputAnchor(source, connectSource.port);
+    let activeSourceId = connectSource.nodeId;
+    let portIndex = connectSource.port;
+    const hoveredNodeId = hover.type === "node" ? hover.id : null;
+    if (hoveredNodeId && hoveredNodeId !== connectSource.nodeId) {
+      const connection = resolveConnection(connectSource.nodeId, hoveredNodeId);
+      if (connection) {
+        activeSourceId = connection.source.id;
+        const sourceNodeCandidate = nodeMapRender.get(connection.source.id);
+        const targetNodeCandidate = nodeMapRender.get(connection.target.id);
+        if (sourceNodeCandidate) {
+          if (sourceNodeCandidate.outputTypes.length > 0) {
+            if (connection.source.id === connectSource.nodeId) {
+              portIndex = clamp(connectSource.port, 0, sourceNodeCandidate.outputTypes.length - 1);
+            } else {
+              const targetInputType = targetNodeCandidate?.inputType ?? null;
+              if (targetInputType) {
+                const compatible = closestOutputPortOfType(sourceNodeCandidate, targetInputType, connectPreview);
+                if (compatible !== -1) {
+                  portIndex = compatible;
+                } else {
+                  portIndex = closestOutputPort(sourceNodeCandidate, connectPreview);
+                }
+              } else {
+                portIndex = closestOutputPort(sourceNodeCandidate, connectPreview);
+              }
+            }
+          }
+        }
+      }
+    }
+    const sourceNode = nodeMapRender.get(activeSourceId);
+    if (!sourceNode || sourceNode.outputTypes.length === 0) return null;
+    const clampedPort = clamp(portIndex, 0, sourceNode.outputTypes.length - 1);
+    const start = fixedOutputAnchor(sourceNode, clampedPort);
     const cp = defaultControlPoint(start, connectPreview, 60);
     const d = `M ${start.x} ${start.y} Q ${cp.x} ${cp.y} ${connectPreview.x} ${connectPreview.y}`;
     return { d };
-  }, [mode, connectSource, connectPreview, nodeMapRender]);
+  }, [mode, connectSource, connectPreview, nodeMapRender, hover, resolveConnection]);
 
   const graphSnapshot = useMemo<GraphSnapshot>(() => {
     const nodeSnapshots: Array<GraphNodeSnapshot> = nodes.map((node) => ({
@@ -901,15 +994,22 @@ export default function CanvasPage() {
       label: node.label,
       position: { x: node.x, y: node.y },
       size: { width: node.width, height: node.height },
-      outputCount: node.outputCount,
+      inputType: node.inputType,
+      outputTypes: [...node.outputTypes],
     }));
-    const edgeSnapshots: Array<GraphEdgeSnapshot> = edges.map((edge) => ({
-      id: edge.id,
-      sourceId: edge.sourceId,
-      sourcePort: edge.sourcePort,
-      targetId: edge.targetId,
-      control: { x: edge.cx, y: edge.cy },
-    }));
+    const nodeLookup = new Map(nodes.map((node) => [node.id, node] as const));
+    const edgeSnapshots: Array<GraphEdgeSnapshot> = edges.map((edge) => {
+      const sourceNode = nodeLookup.get(edge.sourceId);
+      const outputType = sourceNode?.outputTypes[edge.sourcePort] ?? null;
+      return {
+        id: edge.id,
+        sourceId: edge.sourceId,
+        sourcePort: edge.sourcePort,
+        targetId: edge.targetId,
+        control: { x: edge.cx, y: edge.cy },
+        outputType,
+      };
+    });
     return { nodes: nodeSnapshots, edges: edgeSnapshots };
   }, [nodes, edges]);
 
@@ -939,7 +1039,7 @@ export default function CanvasPage() {
     const hoveredNodeId = hover.type === "node" ? hover.id : null;
 
     if (connectSource) {
-      markOutput(connectSource.nodeId, connectSource.port);
+      const selectedSourceNode = nodeMapRender.get(connectSource.nodeId);
       let connectionHighlighted = false;
       if (hoveredNodeId && hoveredNodeId !== connectSource.nodeId) {
         const connection = resolveConnection(connectSource.nodeId, hoveredNodeId);
@@ -947,24 +1047,41 @@ export default function CanvasPage() {
           const { source, target } = connection;
           const sourceNode = nodeMapRender.get(source.id);
           const targetNode = nodeMapRender.get(target.id);
-          if (sourceNode && sourceNode.outputCount > 0) {
-            if (source.id === connectSource.nodeId) {
-              markOutput(source.id, connectSource.port);
-            } else {
-              const portIndex = closestOutputPort(sourceNode, pointerWorld);
-              markOutput(source.id, portIndex);
+          if (sourceNode && targetNode) {
+            const targetInputType = targetNode.inputType;
+            let highlightPort = -1;
+            if (sourceNode.outputTypes.length > 0) {
+              if (source.id === connectSource.nodeId) {
+                const desired = clamp(connectSource.port, 0, sourceNode.outputTypes.length - 1);
+                if (!targetInputType || sourceNode.outputTypes[desired] === targetInputType) {
+                  highlightPort = desired;
+                }
+              } else {
+                const preferred = closestOutputPort(sourceNode, pointerWorld);
+                if (!targetInputType || sourceNode.outputTypes[preferred] === targetInputType) {
+                  highlightPort = preferred;
+                } else {
+                  highlightPort = closestOutputPortOfType(sourceNode, targetInputType, pointerWorld);
+                }
+              }
+            }
+
+            if (highlightPort !== -1 && highlightPort < sourceNode.outputTypes.length) {
+              markOutput(source.id, highlightPort);
+              if (!targetInputType || sourceNode.outputTypes[highlightPort] === targetInputType) {
+                markInput(targetNode.id);
+                connectionHighlighted = true;
+              }
             }
           }
-          if (targetNode) {
-            markInput(targetNode.id);
-          }
-          connectionHighlighted = true;
         }
       }
-      if (!connectionHighlighted) {
-        const sourceNode = nodeMapRender.get(connectSource.nodeId);
-        if (sourceNode && sourceNode.outputCount === 0) {
-          markInput(sourceNode.id);
+      if (!connectionHighlighted && selectedSourceNode) {
+        if (selectedSourceNode.outputTypes.length > 0) {
+          const clamped = clamp(connectSource.port, 0, selectedSourceNode.outputTypes.length - 1);
+          markOutput(selectedSourceNode.id, clamped);
+        } else {
+          markInput(selectedSourceNode.id);
         }
       }
       return highlights;
@@ -973,7 +1090,7 @@ export default function CanvasPage() {
     if (hoveredNodeId != null) {
       const hoveredNode = nodeMapRender.get(hoveredNodeId);
       if (hoveredNode) {
-        if (hoveredNode.outputCount > 0) {
+        if (hoveredNode.outputTypes.length > 0) {
           const portIndex = closestOutputPort(hoveredNode, pointerWorld);
           markOutput(hoveredNode.id, portIndex);
         } else {
@@ -988,7 +1105,7 @@ export default function CanvasPage() {
     const s = nodeMapRender.get(edge.sourceId);
     const t = nodeMapRender.get(edge.targetId);
     if (!s || !t) return null;
-    const maxPort = Math.max(0, s.outputCount - 1);
+    const maxPort = Math.max(0, s.outputTypes.length - 1);
     const portIndex = clamp(edge.sourcePort, 0, maxPort);
     const p0 = fixedOutputAnchor(s, portIndex);
     const p2 = fixedInputAnchor(t);
@@ -1357,10 +1474,38 @@ export default function CanvasPage() {
                             strokeOpacity={0.6}
                           />
                         ) : null}
+                        {n.inputType ? (
+                          <g transform={`translate(${inputAnchor.x - 58} ${inputAnchor.y - 22})`}>
+                            <rect
+                              x={0}
+                              y={0}
+                              width={56}
+                              height={18}
+                              rx={6}
+                              ry={6}
+                              fill="#0f172a"
+                              fillOpacity={0.85}
+                              stroke={highlightInput ? selectedBlue : nodeFill}
+                              strokeWidth={0.8}
+                            />
+                            <text
+                              x={28}
+                              y={12}
+                              textAnchor="middle"
+                              fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                              fontSize={9}
+                              fill={highlightInput ? selectedBlue : "#cbd5f5"}
+                              fillOpacity={highlightInput ? 0.95 : 0.75}
+                            >
+                              {n.inputType}
+                            </text>
+                          </g>
+                        ) : null}
                       </>
                     )}
                     {outputPoints.map((anchor, index) => {
                       const isHighlighted = Boolean(highlightedOutputs?.has(index));
+                      const typeLabel = n.outputTypes[index];
                       return (
                         <g key={`output-${index}`}>
                           <circle
@@ -1382,6 +1527,31 @@ export default function CanvasPage() {
                               strokeOpacity={0.6}
                             />
                           ) : null}
+                          <g transform={`translate(${anchor.x + 8} ${anchor.y - 16})`}>
+                            <rect
+                              x={0}
+                              y={0}
+                              width={56}
+                              height={16}
+                              rx={6}
+                              ry={6}
+                              fill="#0f172a"
+                              fillOpacity={0.85}
+                              stroke={isHighlighted ? selectedBlue : nodeFill}
+                              strokeWidth={0.8}
+                            />
+                            <text
+                              x={28}
+                              y={11}
+                              textAnchor="middle"
+                              fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                              fontSize={9}
+                              fill={isHighlighted ? selectedBlue : "#cbd5f5"}
+                              fillOpacity={isHighlighted ? 0.95 : 0.75}
+                            >
+                              {typeLabel}
+                            </text>
+                          </g>
                         </g>
                       );
                     })}
