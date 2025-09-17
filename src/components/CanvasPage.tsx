@@ -6,6 +6,7 @@ import React, {
   useState
 } from 'react'
 import type {ReactElement} from 'react';
+import { useNavigate } from '@tanstack/react-router'
 
 // Mini Graph Canvas v8 — smooth grab-mode pan + wheel zoom + snap-to-grid + zoom % + full-bleed grid + drag constraints
 // Tweaks: floating palette, connect auto-select, palette-driven add mode, simplified shortcuts.
@@ -218,6 +219,7 @@ const ModeButton = ({ name, value, hotkey, current, onSelect }: ModeButtonProps)
 );
 
 export default function CanvasPage() {
+  const navigate = useNavigate()
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   // View (pan/zoom)
@@ -234,6 +236,14 @@ export default function CanvasPage() {
     { id: FINISH_NODE_ID, x: 480, y: 240, width: NODE_WIDTH, height: NODE_HEIGHT, label: "Finish" },
   ]);
   const [edges, setEdges] = useState<Array<EdgeData>>([]);
+
+  const handleSave = useCallback(() => {
+    // Replace with real persistence when ready
+    // For now, just log the current graph state
+    // eslint-disable-next-line no-console
+    console.log('Canvas saved', { nodes, edges });
+    void navigate({ to: '/', search: { tab: 'agent', agentStrategy: 'custom' } })
+  }, [nodes, edges, navigate])
 
   // Selection & hover
   const [selection, setSelection] = useState<Selection>({ type: null, id: null });
@@ -797,6 +807,19 @@ export default function CanvasPage() {
         <div className="absolute top-6 left-6 z-30">
           <div className="flex items-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900/90 px-3 py-2 shadow-lg backdrop-blur">
             <ModeButton name="Connect" value="connect" hotkey="C" current={mode} onSelect={activateConnectMode} />
+          </div>
+        </div>
+
+        <div className="absolute top-6 right-6 z-30">
+          <div className="flex items-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900/90 px-3 py-2 shadow-lg backdrop-blur">
+            <button
+              type="button"
+              onClick={handleSave}
+              className="px-3 py-1.5 rounded-xl border text-xs font-medium transition bg-sky-600/80 text-white border-sky-500"
+              title="Save"
+            >
+              Save
+            </button>
           </div>
         </div>
 

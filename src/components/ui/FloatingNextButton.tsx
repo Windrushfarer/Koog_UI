@@ -5,7 +5,7 @@ type FloatingNextButtonProps = {
 }
 
 export default function FloatingNextButton({ onClick }: FloatingNextButtonProps) {
-  const { goToNextStep, canGoToNext } = useNavigation()
+  const { goToNextStep, canGoToNext, currentStep } = useNavigation()
 
   const handleClick = () => {
     if (canGoToNext) {
@@ -24,7 +24,7 @@ export default function FloatingNextButton({ onClick }: FloatingNextButtonProps)
           : 'cursor-not-allowed bg-neutral-600 text-neutral-400 shadow-neutral-600/20'
       }`}
     >
-      <span>Next</span>
+      <span>{currentStep === 'output' ? "Let's Koog!" : 'Next'}</span>
       <span aria-hidden>→</span>
     </button>
   )

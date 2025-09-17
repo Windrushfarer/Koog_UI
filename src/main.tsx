@@ -26,7 +26,8 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   validateSearch: (search: Record<string, unknown>) => ({
-    tab: (search.tab as string) || 'trigger'
+    tab: (search.tab as string) || 'trigger',
+    agentStrategy: (search.agentStrategy as string) || undefined
   }),
   component: App,
 })
