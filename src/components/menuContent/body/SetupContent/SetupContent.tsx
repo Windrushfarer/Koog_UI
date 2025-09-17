@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from '../../../../context/FormContext'
 import { PROVIDERS, PROVIDER_VERSIONS } from './SetupContent.consts'
+import Tools from './Tools'
 import type { Provider } from './SetupContent.consts'
 
 export default function SetupContent() {
@@ -8,6 +9,7 @@ export default function SetupContent() {
   const { selectedProviderId, selectedVersionId } = state.setup
   const providers: Array<Provider> = PROVIDERS
   const providerVersions = PROVIDER_VERSIONS
+  const [taskPrompt, setTaskPrompt] = useState('')
 
   useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
@@ -101,6 +103,28 @@ export default function SetupContent() {
             Selected: {selectedProviderId} / {selectedVersionId}
           </p>
         </div>
+
+        <div className="mt-6 max-w-xl">
+          <label
+            htmlFor="taskPrompt"
+            className="text-lg font-semibold mb-2 text-neutral-100"
+          >
+            System prompt
+          </label>
+          <textarea
+            id="taskPrompt"
+            placeholder=""
+            className="block w-full min-h-[120px] rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-y"
+            value={taskPrompt}
+            onChange={(e) => setTaskPrompt(e.target.value)}
+          />
+          <p className="mt-2 text-sm text-neutral-400">
+            {taskPrompt ? `${taskPrompt.length} characters` : 'Describe the task for the agent.'}
+          </p>
+        </div>
+      </div>
+      <div className="mt-8">
+        <Tools />
       </div>
     </section>
   )

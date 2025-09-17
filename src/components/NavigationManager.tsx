@@ -36,7 +36,11 @@ export default function NavigationManager() {
       currentStep={activeId}
     >
       <MultiNavigationMenu />
-      <FloatingNextButton />
+      <div className="sticky bottom-0 z-40 flex justify-end pointer-events-none">
+        <div className="pointer-events-auto p-4">
+          <FloatingNextButton />
+        </div>
+      </div>
     </NavigationProvider>
   )
 }
