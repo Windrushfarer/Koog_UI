@@ -357,7 +357,6 @@ export function FormProvider({ children }: { children: ReactNode }) {
 
   // Log global form state on every change
   useEffect(() => {
-    // Grouped for readability in console
     console.log('[FormContext] State updated:', state)
   }, [state])
 

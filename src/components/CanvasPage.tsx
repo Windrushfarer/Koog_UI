@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { nanoid } from 'nanoid'
 import {
   PROVIDERS,
   PROVIDER_VERSIONS,
@@ -13,12 +14,8 @@ import type {
 } from '@/context/FormContext.tsx'
 import { createDefaultCanvasState, useForm } from '@/context/FormContext.tsx'
 
-// Mini Graph Canvas v8 — smooth grab-mode pan + wheel zoom + snap-to-grid + zoom % + full-bleed grid + drag constraints
-// Tweaks: floating palette, connect auto-select, palette-driven add mode, simplified shortcuts.
-
 const uid = (() => {
-  let n = 1
-  return () => `id_${n++}`
+  return () => nanoid()
 })()
 
 // ----------------------------------------
@@ -2631,13 +2628,12 @@ export default function CanvasPage() {
                       const arrowColor = isHighlighted
                         ? selectedBlue
                         : outputColor
-                      const textColor = isHighlighted ? selectedBlue : nodeText
-                      const arrowTipX = anchor.x - 4
+                      const arrowTipX = anchor.x - 6
                       const arrowHeadBaseX = arrowTipX - 5
                       const arrowTailX = arrowHeadBaseX - 12
-                      const arrowTextX = arrowTailX - 14
+                      const arrowTextX = arrowTailX - 4
                       return (
-                        <g key={`output-${index}`}>
+                        <g key={`output-${n.id}-${index}`}>
                           {outputLabel ? (
                             <>
                               <text
@@ -2648,7 +2644,7 @@ export default function CanvasPage() {
                                 fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
                                 fontSize={11}
                                 fontWeight={500}
-                                fill={textColor}
+                                fill={outputColor}
                                 fillOpacity={isHighlighted ? 0.95 : 0.85}
                               >
                                 {outputLabel}
