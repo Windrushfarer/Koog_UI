@@ -45,7 +45,15 @@ type NodeData = {
   inputType: PortType | null;
   outputTypes: Array<PortType>;
 };
-type EdgeData = { id: string; sourceId: string; sourcePort: number; targetId: string; cx: number; cy: number };
+type EdgeData = {
+  id: string;
+  sourceId: string;
+  sourcePort: number;
+  sourcePortType: PortType | null;
+  targetId: string;
+  cx: number;
+  cy: number;
+};
 type ViewState = { scale: number; panX: number; panY: number };
 type Mode = "select" | "add-node" | "connect";
 type Selection = { type: "node"; id: string } | { type: "edge"; id: string } | { type: null; id: null };
@@ -114,7 +122,7 @@ type GraphEdgeSnapshot = {
   sourcePort: number;
   targetId: string;
   control: Point;
-  outputType: PortType | null;
+  sourcePortType: PortType | null;
 };
 
 type GraphSnapshot = {
@@ -285,7 +293,7 @@ const VerificationIcon = ({ className = "w-4 h-4" }: IconProps) => (
 
 const paletteTemplates: Array<PaletteTemplate> = [
   { id: "ask-llm", label: "Ask LLM", icon: CallLLMIcon, inputType: "String", outputTypes: ["String", "ToolCall"] },
-  { id: "tool-call", label: "Tool call", icon: ToolCallIcon, inputType: "ToolCall", outputTypes: ["String"] },
+  { id: "tool-call", label: "Tool call", icon: ToolCallIcon, inputType: "ToolCall", outputTypes: ["ToolResult"] },
   { id: "task", label: "Task", icon: TaskIcon, inputType: "String", outputTypes: ["String"] },
   { id: "llm-judge", label: "LLM Judge", icon: VerificationIcon, inputType: "String", outputTypes: ["JudgeResult", "JudgeResult"] },
 ];
@@ -295,7 +303,7 @@ const nodeOutputDescriptions: Record<NodeKind, Array<string>> = {
   finish: [],
   "ask-llm": ["onAssistantMessage", "onToolCall"],
   "tool-call": ["ToolResult.output"],
-  task: ["TaskResult"],
+  task: ["TaskResult.result"],
   "llm-judge": ["successful == true", "successful == false"],
 };
 
@@ -893,14 +901,6 @@ export default function CanvasPage() {
       const connection = resolveConnection(connectSource.nodeId, id);
       if (connection) {
         const { source, target } = connection;
-        const existing = edges.find(
-          (ed) => (ed.sourceId === source.id && ed.targetId === target.id) || (ed.sourceId === target.id && ed.targetId === source.id)
-        );
-        if (existing) {
-          setSelection({ type: "edge", id: existing.id });
-          activateSelectMode();
-          return;
-        }
 
         if (source.outputTypes.length === 0) {
           return;
@@ -930,11 +930,31 @@ export default function CanvasPage() {
           return;
         }
 
+        const sourcePortType = source.outputTypes[sourcePort] ?? null;
+        const duplicateEdge = edges.find(
+          (ed) => ed.sourceId === source.id && ed.sourcePort === sourcePort && ed.targetId === target.id
+        );
+        if (duplicateEdge) {
+          setSelection({ type: "edge", id: duplicateEdge.id });
+          activateSelectMode();
+          return;
+        }
+
         const a = fixedOutputAnchor(source, sourcePort);
         const b = fixedInputAnchor(target);
         const cp = defaultControlPoint(a, b, 60);
         const edgeId = uid();
-        setEdges((prev) => prev.concat({ id: edgeId, sourceId: source.id, sourcePort, targetId: target.id, cx: cp.x, cy: cp.y }));
+        setEdges((prev) =>
+          prev.concat({
+            id: edgeId,
+            sourceId: source.id,
+            sourcePort,
+            sourcePortType,
+            targetId: target.id,
+            cx: cp.x,
+            cy: cp.y,
+          })
+        );
         setSelection({ type: "edge", id: edgeId });
         activateSelectMode();
         return;
@@ -1028,14 +1048,14 @@ export default function CanvasPage() {
     const nodeLookup = new Map(nodes.map((node) => [node.id, node] as const));
     const edgeSnapshots: Array<GraphEdgeSnapshot> = edges.map((edge) => {
       const sourceNode = nodeLookup.get(edge.sourceId);
-      const outputType = sourceNode?.outputTypes[edge.sourcePort] ?? null;
+      const fallbackType = sourceNode?.outputTypes[edge.sourcePort] ?? null;
       return {
         id: edge.id,
         sourceId: edge.sourceId,
         sourcePort: edge.sourcePort,
         targetId: edge.targetId,
         control: { x: edge.cx, y: edge.cy },
-        outputType,
+        sourcePortType: edge.sourcePortType ?? fallbackType,
       };
     });
     return { nodes: nodeSnapshots, edges: edgeSnapshots };
@@ -1095,10 +1115,15 @@ export default function CanvasPage() {
             }
 
             if (highlightPort !== -1 && highlightPort < sourceNode.outputTypes.length) {
-              markOutput(source.id, highlightPort);
-              if (!targetInputType || sourceNode.outputTypes[highlightPort] === targetInputType) {
-                markInput(targetNode.id);
-                connectionHighlighted = true;
+              const duplicateEdge = edges.some(
+                (ed) => ed.sourceId === source.id && ed.sourcePort === highlightPort && ed.targetId === target.id
+              );
+              if (!duplicateEdge) {
+                markOutput(source.id, highlightPort);
+                if (!targetInputType || sourceNode.outputTypes[highlightPort] === targetInputType) {
+                  markInput(targetNode.id);
+                  connectionHighlighted = true;
+                }
               }
             }
           }
@@ -1128,7 +1153,7 @@ export default function CanvasPage() {
     }
 
     return highlights;
-  }, [mode, connectSource, hover, nodeMapRender, pointerWorld, resolveConnection]);
+  }, [mode, connectSource, hover, nodeMapRender, pointerWorld, resolveConnection, edges]);
   function edgeGeometry(edge: EdgeData): EdgeGeometry | null {
     const s = nodeMapRender.get(edge.sourceId);
     const t = nodeMapRender.get(edge.targetId);
