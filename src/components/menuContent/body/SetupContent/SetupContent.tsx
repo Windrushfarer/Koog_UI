@@ -3,6 +3,7 @@ import { useForm } from '../../../../context/FormContext'
 import { PROVIDERS, PROVIDER_VERSIONS } from './SetupContent.consts'
 import Tools from './Tools'
 import type { Provider } from './SetupContent.consts'
+import { useForm } from '@/context/FormContext.tsx'
 
 export default function SetupContent() {
   const { state, dispatch } = useForm()
@@ -15,7 +16,7 @@ export default function SetupContent() {
     if (!selectedProviderId && providers.length > 0) {
       const firstProvider = providers[0]
       const versions = providerVersions[firstProvider.id]
-      if (versions && versions.length > 0) {
+      if (versions.length > 0) {
         const firstVersion = versions[0]
         dispatch({
           type: 'SET_SETUP',
@@ -48,7 +49,7 @@ export default function SetupContent() {
                 type="button"
                 onClick={() => {
                   const versions = providerVersions[p.id]
-                  if (versions && versions.length > 0) {
+                  if (versions.length > 0) {
                     const firstVersion = versions[0].id
                     dispatch({
                       type: 'SET_SETUP',
@@ -93,7 +94,7 @@ export default function SetupContent() {
               })
             }}
           >
-            {(providerVersions[selectedProviderId] || []).map((v) => (
+            {selectedProviderVersions.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name}
               </option>

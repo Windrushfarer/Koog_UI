@@ -27,7 +27,8 @@ export default function NavigationManager() {
   }
 
   const currentIndex = defaultNavigation.findIndex(item => item.id === activeId)
-  const canGoToNext = currentIndex < defaultNavigation.length - 1 && canProceedToNext(activeId)
+  const isLastStep = currentIndex === defaultNavigation.length - 1
+  const canGoToNext = isLastStep ? canProceedToNext(activeId) : (currentIndex < defaultNavigation.length - 1 && canProceedToNext(activeId))
 
   return (
     <NavigationProvider
