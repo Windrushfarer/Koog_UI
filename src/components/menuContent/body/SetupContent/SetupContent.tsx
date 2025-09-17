@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { PROVIDERS, PROVIDER_VERSIONS } from './SetupContent.consts'
 import Tools from './Tools'
 import type { Provider } from './SetupContent.consts'
@@ -6,11 +6,10 @@ import { useForm } from '@/context/FormContext.tsx'
 
 export default function SetupContent() {
   const { state, dispatch } = useForm()
-  const { selectedProviderId, selectedVersionId } = state.setup
+  const { selectedProviderId, selectedVersionId, systemPrompt } = state.setup
   const providers: Array<Provider> = PROVIDERS
   const providerVersions = PROVIDER_VERSIONS
   const selectedProviderVersions = selectedProviderId ? providerVersions[selectedProviderId] ?? [] : []
-  const [taskPrompt, setTaskPrompt] = useState('')
 
   useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
@@ -116,11 +115,11 @@ export default function SetupContent() {
             id="taskPrompt"
             placeholder=""
             className="block w-full min-h-[120px] rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-neutral-100 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-y"
-            value={taskPrompt}
-            onChange={(e) => setTaskPrompt(e.target.value)}
+            value={systemPrompt}
+            onChange={(e) => dispatch({ type: 'SET_SYSTEM_PROMPT', payload: { systemPrompt: e.target.value } })}
           />
           <p className="mt-2 text-sm text-neutral-400">
-            {taskPrompt ? `${taskPrompt.length} characters` : 'Describe the task for the agent.'}
+            {systemPrompt ? `${systemPrompt.length} characters` : 'Describe the task for the agent.'}
           </p>
         </div>
       </div>

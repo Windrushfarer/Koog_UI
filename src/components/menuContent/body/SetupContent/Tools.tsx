@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
+import { useForm } from '@/context/FormContext'
 
 type Tool = {
   id: string
@@ -13,12 +14,16 @@ const DEFAULT_TOOLS: Array<Tool> = [
 ]
 
 export default function Tools() {
-  const [enabledTools, setEnabledTools] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(DEFAULT_TOOLS.map((t) => [t.id, true]))
-  )
+  const { state, dispatch } = useForm()
+  const available = state.tools.available?.length ? state.tools.available : DEFAULT_TOOLS
+  const enabledTools = useMemo(() => {
+    if (state.tools.enabledMap && Object.keys(state.tools.enabledMap).length > 0) return state.tools.enabledMap
+    return Object.fromEntries(available.map(t => [t.id, true]))
+  }, [state.tools.enabledMap, available])
 
   function toggleTool(id: string) {
-    setEnabledTools((prev) => ({ ...prev, [id]: !prev[id] }))
+    const next = !enabledTools[id]
+    dispatch({ type: 'SET_TOOL_ENABLED', payload: { id, enabled: next } })
   }
 
   return (
@@ -29,7 +34,7 @@ export default function Tools() {
 
         <div className="max-h-64 overflow-y-auto pr-1">
           <ul className="space-y-3">
-            {DEFAULT_TOOLS.map((tool) => {
+            {available.map((tool) => {
               const isOn = Boolean(enabledTools[tool.id])
               return (
                 <li key={tool.id} className="w-full rounded-2xl p-[1px] bg-gradient-to-r from-[#B191FF]/30 via-transparent to-[#B191FF]/30">
