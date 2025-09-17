@@ -89,6 +89,27 @@ type ConnectSourceState = {
   port: number;
 };
 
+type GraphNodeSnapshot = {
+  id: string;
+  label: string;
+  position: Point;
+  size: { width: number; height: number };
+  outputCount: number;
+};
+
+type GraphEdgeSnapshot = {
+  id: string;
+  sourceId: string;
+  sourcePort: number;
+  targetId: string;
+  control: Point;
+};
+
+type GraphSnapshot = {
+  nodes: Array<GraphNodeSnapshot>;
+  edges: Array<GraphEdgeSnapshot>;
+};
+
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const snap = (v: number, step = GRID) => Math.round(v / step) * step;
 
@@ -393,6 +414,25 @@ export default function CanvasPage() {
     });
   }, [clampPanToWorld]);
 
+  const activateSelectMode = useCallback(() => {
+    setMode("select");
+    setPendingTemplateId(null);
+    setConnectSource(null);
+    setConnectPreview(null);
+    setNodePreview(null);
+  }, []);
+  const activateConnectMode = useCallback(() => {
+    if (mode === "connect") {
+      activateSelectMode();
+      return;
+    }
+    setMode("connect");
+    setPendingTemplateId(null);
+    setConnectSource(null);
+    setConnectPreview(null);
+    setNodePreview(null);
+  }, [mode, activateSelectMode]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -444,7 +484,7 @@ export default function CanvasPage() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [selection, mode, currentTemplate, editingLabelId, commitLabelEdit]);
+  }, [selection, mode, currentTemplate, editingLabelId, commitLabelEdit, activateConnectMode, activateSelectMode]);
 
   const nodeMap = useMemo(() => new Map<string, NodeData>(nodes.map((n) => [n.id, n])), [nodes]);
   const resolveConnection = useCallback(
@@ -632,24 +672,6 @@ export default function CanvasPage() {
     });
   };
 
-  const activateSelectMode = () => {
-    setMode("select");
-    setPendingTemplateId(null);
-    setConnectSource(null);
-    setConnectPreview(null);
-    setNodePreview(null);
-  };
-  const activateConnectMode = () => {
-    if (mode === "connect") {
-      activateSelectMode();
-      return;
-    }
-    setMode("connect");
-    setPendingTemplateId(null);
-    setConnectSource(null);
-    setConnectPreview(null);
-    setNodePreview(null);
-  };
   const activateTemplate = (templateId: string) => {
     if (mode === "add-node" && pendingTemplateId === templateId) {
       activateSelectMode();
@@ -872,6 +894,29 @@ export default function CanvasPage() {
     const d = `M ${start.x} ${start.y} Q ${cp.x} ${cp.y} ${connectPreview.x} ${connectPreview.y}`;
     return { d };
   }, [mode, connectSource, connectPreview, nodeMapRender]);
+
+  const graphSnapshot = useMemo<GraphSnapshot>(() => {
+    const nodeSnapshots: Array<GraphNodeSnapshot> = nodes.map((node) => ({
+      id: node.id,
+      label: node.label,
+      position: { x: node.x, y: node.y },
+      size: { width: node.width, height: node.height },
+      outputCount: node.outputCount,
+    }));
+    const edgeSnapshots: Array<GraphEdgeSnapshot> = edges.map((edge) => ({
+      id: edge.id,
+      sourceId: edge.sourceId,
+      sourcePort: edge.sourcePort,
+      targetId: edge.targetId,
+      control: { x: edge.cx, y: edge.cy },
+    }));
+    return { nodes: nodeSnapshots, edges: edgeSnapshots };
+  }, [nodes, edges]);
+
+  const graphSnapshotRef = useRef<GraphSnapshot>(graphSnapshot);
+  useEffect(() => {
+    graphSnapshotRef.current = graphSnapshot;
+  }, [graphSnapshot]);
 
   const connectorHighlights = useMemo(() => {
     const highlights = new Map<string, ConnectorHighlight>();
