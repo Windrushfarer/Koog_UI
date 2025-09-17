@@ -5,8 +5,8 @@ import React, {
   useRef,
   useState
 } from 'react'
-import type {ReactElement} from 'react';
 import { useNavigate } from '@tanstack/react-router'
+import type {ReactElement} from 'react';
 
 // Mini Graph Canvas v8 — smooth grab-mode pan + wheel zoom + snap-to-grid + zoom % + full-bleed grid + drag constraints
 // Tweaks: floating palette, connect auto-select, palette-driven add mode, simplified shortcuts.
@@ -24,16 +24,19 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 3;
 const BG_EXTENT = 100000; // big world rect for full-bleed grid
 const WORLD = { minX: -3000, minY: -3000, maxX: 3000, maxY: 3000 };
-const NODE_WIDTH = 168;
-const NODE_HEIGHT = 72;
+const NODE_WIDTH = 180;
+const NODE_HEIGHT = 90;
 const START_NODE_ID = "agent-start-node";
 const FINISH_NODE_ID = "agent-finish-node";
 
 type Point = { x: number; y: number };
-type PortType = "String" | "ToolCall" | "ToolResult";
+type PortType = "String" | "ToolCall" | "ToolResult" | "JudgeResult";
+type NodeKind = "start" | "finish" | "ask-llm" | "tool-call" | "task" | "llm-judge";
+type PaletteNodeKind = Exclude<NodeKind, "start" | "finish">;
 
 type NodeData = {
   id: string;
+  kind: NodeKind;
   x: number;
   y: number;
   width: number;
@@ -57,7 +60,7 @@ type PanDelta = { dx: number; dy: number };
 type NodeConnection = { source: NodeData; target: NodeData };
 
 type PaletteTemplate = {
-  id: string;
+  id: PaletteNodeKind;
   label: string;
   icon: (props: IconProps) => ReactElement;
   inputType: PortType | null;
@@ -97,6 +100,7 @@ type ConnectSourceState = {
 
 type GraphNodeSnapshot = {
   id: string;
+  kind: NodeKind;
   label: string;
   position: Point;
   size: { width: number; height: number };
@@ -281,15 +285,24 @@ const VerificationIcon = ({ className = "w-4 h-4" }: IconProps) => (
 
 const paletteTemplates: Array<PaletteTemplate> = [
   { id: "ask-llm", label: "Ask LLM", icon: CallLLMIcon, inputType: "String", outputTypes: ["String", "ToolCall"] },
-  { id: "tool-call", label: "Tool call", icon: ToolCallIcon, inputType: "ToolCall", outputTypes: ["ToolResult"] },
+  { id: "tool-call", label: "Tool call", icon: ToolCallIcon, inputType: "ToolCall", outputTypes: ["String"] },
   { id: "task", label: "Task", icon: TaskIcon, inputType: "String", outputTypes: ["String"] },
-  { id: "llm-judge", label: "LLM Judge", icon: VerificationIcon, inputType: "String", outputTypes: ["String", "String"] },
+  { id: "llm-judge", label: "LLM Judge", icon: VerificationIcon, inputType: "String", outputTypes: ["JudgeResult", "JudgeResult"] },
 ];
+
+const nodeOutputDescriptions: Record<NodeKind, Array<string>> = {
+  start: [],
+  finish: [],
+  "ask-llm": ["onAssistantMessage", "onToolCall"],
+  "tool-call": ["ToolResult.output"],
+  task: ["TaskResult"],
+  "llm-judge": ["successful == true", "successful == false"],
+};
 
 type PaletteButtonProps = {
   template: PaletteTemplate;
   active: boolean;
-  onSelect: (templateId: string) => void;
+  onSelect: (templateId: PaletteNodeKind) => void;
 };
 
 const PaletteButton = ({ template, active, onSelect }: PaletteButtonProps) => {
@@ -346,10 +359,11 @@ export default function CanvasPage() {
   }, [view]);
 
   const [mode, setMode] = useState<Mode>("select");
-  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
+  const [pendingTemplateId, setPendingTemplateId] = useState<PaletteNodeKind | null>(null);
   const [nodes, setNodes] = useState<Array<NodeData>>([
     {
       id: START_NODE_ID,
+      kind: "start",
       x: 140,
       y: 240,
       width: NODE_WIDTH,
@@ -360,6 +374,7 @@ export default function CanvasPage() {
     },
     {
       id: FINISH_NODE_ID,
+      kind: "finish",
       x: 480,
       y: 240,
       width: NODE_WIDTH,
@@ -374,7 +389,6 @@ export default function CanvasPage() {
   const handleSave = useCallback(() => {
     // Replace with real persistence when ready
     // For now, just log the current graph state
-    // eslint-disable-next-line no-console
     console.log('Canvas saved', { nodes, edges });
     void navigate({ to: '/', search: { tab: 'agent', agentStrategy: 'custom' } })
   }, [nodes, edges, navigate])
@@ -549,12 +563,12 @@ export default function CanvasPage() {
       const second = nodeMap.get(secondId);
       if (!first || !second) return null;
 
-      const firstIsStart = first.id === START_NODE_ID;
-      const secondIsStart = second.id === START_NODE_ID;
+      const firstIsStart = first.kind === "start";
+      const secondIsStart = second.kind === "start";
       if (firstIsStart && secondIsStart) return null;
 
-      const firstIsFinish = first.id === FINISH_NODE_ID;
-      const secondIsFinish = second.id === FINISH_NODE_ID;
+      const firstIsFinish = first.kind === "finish";
+      const secondIsFinish = second.kind === "finish";
       if (firstIsFinish && secondIsFinish) return null;
 
       let source = first;
@@ -591,9 +605,11 @@ export default function CanvasPage() {
     (nodeId: string) => {
       const node = nodeMap.get(nodeId);
       if (!node) return;
+      if (node.kind === "start" || node.kind === "finish") {
+        return;
+      }
       const label = (node.label || "").trim();
-      const lower = label.toLowerCase();
-      if (!label || lower === "start" || lower === "finish") {
+      if (!label) {
         return;
       }
       setEditingLabelId(nodeId);
@@ -727,7 +743,7 @@ export default function CanvasPage() {
     });
   };
 
-  const activateTemplate = (templateId: string) => {
+  const activateTemplate = (templateId: PaletteNodeKind) => {
     if (mode === "add-node" && pendingTemplateId === templateId) {
       activateSelectMode();
       return;
@@ -810,6 +826,7 @@ export default function CanvasPage() {
       setNodes((prev) =>
         prev.concat({
           id,
+          kind: currentTemplate.id,
           x: placement.x,
           y: placement.y,
           width: NODE_WIDTH,
@@ -1001,6 +1018,7 @@ export default function CanvasPage() {
   const graphSnapshot = useMemo<GraphSnapshot>(() => {
     const nodeSnapshots: Array<GraphNodeSnapshot> = nodes.map((node) => ({
       id: node.id,
+      kind: node.kind,
       label: node.label,
       position: { x: node.x, y: node.y },
       size: { width: node.width, height: node.height },
@@ -1388,10 +1406,8 @@ export default function CanvasPage() {
               const isSelected = selection.type === "node" && selection.id === n.id;
               const isHovered = hover.type === "node" && hover.id === n.id;
               const stroke = isSelected ? selectedBlue : isHovered ? lightBlue : baseStroke;
-              const labelId = n.id.trim();
-              const labelLower = labelId.toLowerCase();
-              const isPredefinedNode = labelLower === START_NODE_ID || labelLower === FINISH_NODE_ID;
-              const canEditLabel = Boolean(labelId) && !isPredefinedNode;
+              const isPredefinedNode = n.kind === "start" || n.kind === "finish";
+              const canEditLabel = !isPredefinedNode;
               const isEditingLabel = canEditLabel && editingLabelId === n.id;
               const displayLabel = n.label;
               const desiredCursor = mode === "connect" ? "crosshair" : !isSelected && isHovered ? "pointer" : "grab";
@@ -1400,6 +1416,7 @@ export default function CanvasPage() {
               const highlightInput = Boolean(connectorHighlight?.input);
               const highlightedOutputs = connectorHighlight?.outputs;
               const outputPoints = outputAnchors(n);
+              const outputDescriptions = nodeOutputDescriptions[n.kind];
               return (
                 <g
                   key={n.id}
@@ -1476,7 +1493,7 @@ export default function CanvasPage() {
                     </text>
                   ) : null}
                   <g style={{ pointerEvents: "none" }}>
-                    {n.id !== START_NODE_ID && (
+                    {n.kind !== "start" && (
                       <>
                         <circle
                           cx={inputAnchor.x}
@@ -1529,8 +1546,46 @@ export default function CanvasPage() {
                     {outputPoints.map((anchor, index) => {
                       const isHighlighted = Boolean(highlightedOutputs?.has(index));
                       const typeLabel = n.outputTypes[index];
+                      const outputLabel = outputDescriptions[index];
+                      const arrowColor = isHighlighted ? selectedBlue : outputColor;
+                      const textColor = isHighlighted ? selectedBlue : nodeText;
+                      const arrowTipX = anchor.x - 4;
+                      const arrowHeadBaseX = arrowTipX - 5;
+                      const arrowTailX = arrowHeadBaseX - 12;
+                      const arrowTextX = arrowTailX - 14;
                       return (
                         <g key={`output-${index}`}>
+                          {outputLabel ? (
+                            <>
+                              <text
+                                x={arrowTextX}
+                                y={anchor.y}
+                                textAnchor="end"
+                                dominantBaseline="middle"
+                                fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI"
+                                fontSize={11}
+                                fontWeight={500}
+                                fill={textColor}
+                                fillOpacity={isHighlighted ? 0.95 : 0.85}
+                              >
+                                {outputLabel}
+                              </text>
+                              <line
+                                x1={arrowTailX}
+                                y1={anchor.y}
+                                x2={arrowHeadBaseX}
+                                y2={anchor.y}
+                                stroke={arrowColor}
+                                strokeWidth={1.4}
+                                strokeLinecap="round"
+                              />
+                              <path
+                                d={`M ${arrowTipX} ${anchor.y} L ${arrowHeadBaseX} ${anchor.y - 3} L ${arrowHeadBaseX} ${anchor.y + 3} Z`}
+                                fill={arrowColor}
+                                fillOpacity={isHighlighted ? 0.95 : 0.85}
+                              />
+                            </>
+                          ) : null}
                           <circle
                             cx={anchor.x}
                             cy={anchor.y}
