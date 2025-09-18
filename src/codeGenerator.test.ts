@@ -5,9 +5,19 @@ import type { CanvasGraphSnapshot } from '@/context/FormContext.tsx'
 
 describe('generateCodeFromGraph', () => {
   const baseTaskNode = {
-    id: 'node-1',
+    id: 'task-1',
     kind: 'task' as const,
     label: 'Task',
+    position: { x: 0, y: 0 },
+    size: { width: 100, height: 100 },
+    inputType: 'String',
+    outputTypes: ['String'],
+  }
+
+  const baseJudgeNode = {
+    id: 'judge-1',
+    kind: 'llm-judge' as const,
+    label: 'Judge',
     position: { x: 0, y: 0 },
     size: { width: 100, height: 100 },
     inputType: 'String',
@@ -17,6 +27,8 @@ describe('generateCodeFromGraph', () => {
   it('generates Kotlin snippet for task node with PascalCase name', () => {
     const snapshot: CanvasGraphSnapshot = {
       nodes: [
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         {
           ...baseTaskNode,
           config: {
@@ -31,7 +43,8 @@ describe('generateCodeFromGraph', () => {
 
     const result = generateCodeFromGraph(snapshot)
 
-    expect(result).toBe(`val taskNodePrepareTrip by subgraphWithTask<String, String>(
+    expect(result)
+      .toBe(`val taskNodePrepareTrip by subgraphWithTask<String, String>(
         toolSelectionStrategy = ToolSelectionStrategy.ALL
     ) { input ->
         """
@@ -43,6 +56,8 @@ describe('generateCodeFromGraph', () => {
   it('falls back to default name when task name is empty', () => {
     const snapshot: CanvasGraphSnapshot = {
       nodes: [
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         {
           ...baseTaskNode,
           config: {
@@ -64,5 +79,57 @@ describe('generateCodeFromGraph', () => {
         Do something great
         """.trimIndent()
     }`)
+  })
+
+  it('generates Kotlin snippet for judge node with PascalCase name', () => {
+    const snapshot: CanvasGraphSnapshot = {
+      nodes: [
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        {
+          ...baseJudgeNode,
+          config: {
+            name: 'Sentiment Analysis',
+            prompt: 'Critique something',
+            providerId: 'openai',
+            modelId: 'gpt-5',
+          },
+        },
+      ],
+      edges: [],
+    }
+
+    const result = generateCodeFromGraph(snapshot)
+
+    expect(result).toBe(`val criticSentimentAnalysis by llmAsAJudge(
+        llmModel = OpenAIModels.GPT_4_1,
+        task = "Critique something"
+    )`)
+  })
+
+  it('escapes double quotes inside judge prompt and falls back name when empty', () => {
+    const snapshot: CanvasGraphSnapshot = {
+      nodes: [
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        {
+          ...baseJudgeNode,
+          config: {
+            name: '',
+            prompt: 'Explain "why" carefully',
+            providerId: 'openai',
+            modelId: 'gpt-4',
+          },
+        },
+      ],
+      edges: [],
+    }
+
+    const result = generateCodeFromGraph(snapshot)
+
+    expect(result).toBe(`val criticJudge by llmAsAJudge(
+        llmModel = OpenAIModels.GPT_4_1,
+        task = "Explain \\\"why\\\" carefully"
+    )`)
   })
 })
