@@ -13,6 +13,7 @@ import reportWebVitals from './reportWebVitals.ts'
 
 import App from './App.tsx'
 import CanvasPage from './components/CanvasPage.tsx'
+import AgentLogsPage from './components/AgentLogsPage.tsx'
 import { FormProvider } from '@/context/FormContext.tsx'
 
 const rootRoute = createRootRoute({
@@ -38,7 +39,13 @@ const canvasRoute = createRoute({
   component: CanvasPage,
 })
 
-const routeTree = rootRoute.addChildren([indexRoute, canvasRoute])
+const logsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/logs',
+  component: AgentLogsPage,
+})
+
+const routeTree = rootRoute.addChildren([indexRoute, canvasRoute, logsRoute])
 
 const router = createRouter({
   routeTree,

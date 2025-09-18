@@ -25,12 +25,24 @@ export default function OutputContent() {
     })
   }, [selected, slackValue, telegramValue, dispatch])
 
+  const isValid = selected !== null &&
+    ((selected === 'slack' && slackValue.trim() !== '') ||
+     (selected === 'telegram' && telegramValue.trim() !== ''))
+
   return (
     <section className="h-screen">
       <h2 className="text-xl font-semibold mb-2 text-neutral-100">Output</h2>
       <p className="text-neutral-300 mb-4">
         Choose a destination for the agent output.
       </p>
+
+      {!isValid && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-950/30 border border-amber-800/50">
+          <p className="text-amber-300 text-sm">
+            💡 Select an output destination
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 items-center">
         <div

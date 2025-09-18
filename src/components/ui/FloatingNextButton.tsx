@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { useNavigation } from '../../context/NavigationContext'
 
 type FloatingNextButtonProps = {
@@ -9,6 +10,7 @@ export default function FloatingNextButton({
   onClick,
 }: FloatingNextButtonProps) {
   const { goToNextStep, canGoToNext, currentStep } = useNavigation()
+  const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const loadingTimeoutRef = useRef<number | undefined>(undefined)
 
@@ -39,9 +41,8 @@ export default function FloatingNextButton({
       setIsLoading(true)
       loadingTimeoutRef.current = window.setTimeout(() => {
         loadingTimeoutRef.current = undefined
-        goToNextStep()
-        onClick?.()
         setIsLoading(false)
+        void navigate({ to: '/logs' })
       }, 3000)
       return
     }
