@@ -103,7 +103,7 @@ export type AgentState =
   | { mode: 'default' }
   | { mode: 'custom'; state: CanvasState }
 
-type FormState = {
+export type FormState = {
   trigger: {
     selectedTrigger: TriggerType
     value: string

@@ -511,7 +511,7 @@ const paletteTemplates: Array<PaletteTemplate> = [
   },
   {
     id: 'task',
-    label: 'Task',
+    label: 'Sub-Agent',
     icon: TaskIcon,
     inputType: 'String',
     outputTypes: ['String'],

@@ -3,7 +3,7 @@ import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'
 import { kotlin } from '@codemirror/legacy-modes/mode/clike'
 import { StreamLanguage } from '@codemirror/language'
-import { darcula } from '@uiw/codemirror-theme-darcula';
+import { darcula } from '@uiw/codemirror-theme-darcula'
 
 type CodeViewModalProps = {
   isOpen: boolean
@@ -33,7 +33,7 @@ export default function CodeViewModal({
         StreamLanguage.define(kotlin),
         // EditorState.readOnly.of(true),
         EditorView.lineWrapping,
-        darcula
+        darcula,
       ],
     })
 
@@ -65,7 +65,7 @@ export default function CodeViewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative max-h-[90vh] w-[90vw] max-w-4xl rounded-lg bg-neutral-900 border border-neutral-700 shadow-xl">
+      <div className="relative max-h-[90vh] w-[90vw] max-w-5xl rounded-lg bg-neutral-900 border border-neutral-700 shadow-xl">
         <div className="flex items-center justify-between border-b border-neutral-700 px-6 py-4">
           <h2 className="text-lg font-semibold text-neutral-100">View Code</h2>
           <button
