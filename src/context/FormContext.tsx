@@ -132,7 +132,7 @@ type FormAction =
     }
   | {
       type: 'SET_SETUP'
-      payload: { selectedProviderId: string; selectedVersionId: string }
+      payload: { selectedProviderId: string; selectedLLMId: string }
     }
   | { type: 'SET_SYSTEM_PROMPT'; payload: { systemPrompt: string } }
   | {

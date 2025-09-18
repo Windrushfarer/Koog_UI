@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { PROVIDERS, PROVIDER_LLMS } from './SetupContent.consts'
 import Tools from './Tools'
 import type { Provider } from './SetupContent.consts'
@@ -13,22 +12,22 @@ export default function SetupContent() {
     ? (providerVersions[selectedProviderId] ?? [])
     : []
 
-  useEffect(() => {
-    if (!selectedProviderId && providers.length > 0) {
-      const firstProvider = providers[0]
-      const versions = providerVersions[firstProvider.id]
-      if (versions.length > 0) {
-        const firstVersion = versions[0]
-        dispatch({
-          type: 'SET_SETUP',
-          payload: {
-            selectedProviderId: firstProvider.id,
-            selectedVersionId: firstVersion.id,
-          },
-        })
-      }
-    }
-  }, [selectedProviderId, providers, providerVersions, dispatch])
+  // useEffect(() => {
+  //   if (!selectedProviderId && providers.length > 0) {
+  //     const firstProvider = providers[0]
+  //     const versions = providerVersions[firstProvider.id]
+  //     if (versions.length > 0) {
+  //       const firstVersion = versions[0]
+  //       dispatch({
+  //         type: 'SET_SETUP',
+  //         payload: {
+  //           selectedProviderId: firstProvider.id,
+  //           selectedLLMId: firstVersion.id,
+  //         },
+  //       })
+  //     }
+  //   }
+  // }, [selectedProviderId, providers, providerVersions, dispatch])
 
   return (
     <section>
@@ -56,7 +55,7 @@ export default function SetupContent() {
                       type: 'SET_SETUP',
                       payload: {
                         selectedProviderId: p.id,
-                        selectedVersionId: firstVersion,
+                        selectedLLMId: firstVersion,
                       },
                     })
                   }
@@ -90,7 +89,7 @@ export default function SetupContent() {
                 type: 'SET_SETUP',
                 payload: {
                   selectedProviderId,
-                  selectedVersionId: e.target.value,
+                  selectedLLMId: e.target.value,
                 },
               })
             }}
@@ -101,9 +100,6 @@ export default function SetupContent() {
               </option>
             ))}
           </select>
-          <p className="mt-2 text-sm text-neutral-400">
-            Selected: {selectedProviderId} / {selectedLLMId}
-          </p>
         </div>
 
         <div className="mt-6 max-w-xl">
