@@ -12,46 +12,40 @@ export type ProviderVersion = {
 export const PROVIDERS: Array<Provider> = [
   { id: 'openai', name: 'OpenAI', url: 'https://platform.openai.com/' },
   { id: 'anthropic', name: 'Anthropic', url: 'https://console.anthropic.com/' },
-  {
-    id: 'google',
-    name: 'Google AI Studio',
-    url: 'https://aistudio.google.com/',
-  },
-  { id: 'openrouter', name: 'OpenRouter', url: 'https://openrouter.ai/' },
-  { id: 'azure', name: 'Azure OpenAI', url: 'https://portal.azure.com/' },
-  { id: 'mistral', name: 'Mistral', url: 'https://console.mistral.ai/' },
+  { id: 'google', name: 'Google', url: 'https://aistudio.google.com/' },
 ]
 
 export const PROVIDER_LLMS: Record<Provider['id'], Array<ProviderVersion>> = {
   openai: [
-    { id: 'gpt-4o', name: 'gpt-4o' },
-    { id: 'gpt-4o-mini', name: 'gpt-4o-mini' },
-    { id: 'o3-mini', name: 'o3-mini' },
-    { id: 'gpt-4.1', name: 'gpt-4.1' },
-    { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' },
-    { id: 'gpt-5', name: 'gpt-5' },
+    { id: 'GPT5Mini', name: 'GPT-5 Mini' },
+    { id: 'GPT5Nano', name: 'GPT-5 Nano' },
+    { id: 'GPT5', name: 'GPT-5' },
+    { id: 'GPT4_1', name: 'GPT-4.1' },
+    { id: 'GPT4o', name: 'GPT-4o' },
+    { id: 'O1', name: 'o1' },
+    { id: 'O3', name: 'o3' },
+    { id: 'O3Mini', name: 'O3 Mini' },
+    { id: 'O4Mini', name: 'O4 Mini' },
+    { id: 'GPT4oMini', name: 'GPT-4o Mini' },
+    { id: 'GPT4_1Mini', name: 'GPT-4.1 Mini' },
+    { id: 'GPT4_1Nano', name: 'GPT-4.1 Nano' },
   ],
   anthropic: [
-    { id: 'claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
-    { id: 'claude-3.5-haiku', name: 'Claude 3.5 Haiku' },
-    { id: 'claude-3-opus', name: 'Claude 3 Opus' },
+    { id: 'Sonnet_4', name: 'Sonnet 4' },
+    { id: 'Sonnet_3_7', name: 'Sonnet 3.7' },
+    { id: 'Opus_4_1', name: 'Opus 4.1' },
+    { id: 'Opus_4', name: 'Opus 4' },
+    { id: 'Opus_3', name: 'Opus 3' },
+    { id: 'Haiku_3_5', name: 'Haiku 3.5' },
+    { id: 'Haiku_3', name: 'Haiku 3' },
   ],
   google: [
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (exp)' },
-  ],
-  openrouter: [
-    { id: 'meta-llama-3.1-70b-instruct', name: 'Llama 3.1 70B Instruct' },
-    { id: 'qwen2.5-72b-instruct', name: 'Qwen2.5 72B Instruct' },
-  ],
-  azure: [
-    { id: 'gpt-4o-azure', name: 'gpt-4o (Azure)' },
-    { id: 'gpt-4o-mini-azure', name: 'gpt-4o-mini (Azure)' },
-  ],
-  mistral: [
-    { id: 'mistral-large', name: 'Mistral Large' },
-    { id: 'mistral-small', name: 'Mistral Small' },
-    { id: 'codestral-22b', name: 'Codestral 22B' },
+    { id: 'Gemini2_5Pro', name: 'Gemini 2.5 Pro' },
+    { id: 'Gemini2_5Flash', name: 'Gemini 2.5 Flash' },
+    { id: 'Gemini2_0Flash', name: 'Gemini 2.0 Flash' },
+    { id: 'Gemini2_5FlashLite', name: 'Gemini 2.5 Flash Lite' },
+    { id: 'Gemini2_0FlashLite', name: 'Gemini 2.0 Flash Lite' },
   ],
 }
+
+
